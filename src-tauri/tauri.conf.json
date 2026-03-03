@@ -1,0 +1,42 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicepkg/gpt-runner/main/packages/gpt-runner-core/src/schema/tauri.conf.json",
+  "productName": "SampleArchitect",
+  "version": "1.0.0",
+  "identifier": "com.evenant.samplearchitect",
+  "build": {
+    "frontendDist": "../src",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "SampleArchitect",
+        "width": 1400,
+        "height": 800,
+        "minWidth": 1200,
+        "minHeight": 700,
+        "resizable": true,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "fs": {
+      "scope": {
+        "allow": ["**"]
+      }
+    },
+    "dialog": {
+      "all": true
+    },
+    "shell": {
+      "open": true
+    }
+  }
+}
