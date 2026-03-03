@@ -1,0 +1,270 @@
+{ KSP Script Reference for SampleArchitect }
+{ This file is a REFERENCE for the ksp-gen.js generator. }
+{ The generator reads the sample map + template config and outputs }
+{ a .ksp file following this exact structure. }
+{                                                                  }
+{ IMPORTANT NOTES FOR THE GENERATOR:                               }
+{ - KSP uses { } for comments, NOT //                             }
+{ - Variable names start with $                                    }
+{ - Arrays use %                                                   }
+{ - String variables use @                                         }
+{ - Constants start with $ and are ALL_CAPS                        }
+{ - Indentation uses 2 spaces                                     }
+{ - Line endings must be LF (not CRLF)                            }
+{ - File encoding must be UTF-8                                    }
+{ - Kontakt 6+ compatible syntax only                             }
+{                                                                  }
+{ The generator should output the script as a plain text string.   }
+{ Replace all [PLACEHOLDERS] with actual values from sample data.  }
+
+
+on init
+  set_script_title("[INSTRUMENT_NAME] - SampleArchitect")
+  
+  { ── Instrument Info ────────────────────────────────────── }
+  message("Loading [INSTRUMENT_NAME] | [SAMPLE_COUNT] samples | SampleArchitect")
+  
+  { ── UI Controls ────────────────────────────────────────── }
+  { Only include knobs that are enabled in the template config. }
+  { The generator should conditionally include/exclude each block. }
+  
+  { Volume Knob — include if controls.volume === true }
+  declare ui_knob $Volume (0, 1000000, 1)
+  $Volume := [DEFAULT_VOLUME_SCALED]
+  set_knob_defval($Volume, $Volume)
+  set_knob_unit($Volume, $KNOB_UNIT_NONE)
+  set_knob_label($Volume, "Vol")
+  make_persistent($Volume)
+  
+  { Pan Knob — include if controls.pan === true }
+  declare ui_knob $Pan (-1000, 1000, 1)
+  $Pan := 0
+  set_knob_defval($Pan, 0)
+  set_knob_unit($Pan, $KNOB_UNIT_NONE)
+  set_knob_label($Pan, "Pan")
+  make_persistent($Pan)
+  
+  { Attack Knob — include if controls.attack === true }
+  declare ui_knob $Attack (0, 1000000, 1)
+  $Attack := [DEFAULT_ATTACK_SCALED]
+  set_knob_defval($Attack, $Attack)
+  set_knob_unit($Attack, $KNOB_UNIT_NONE)
+  set_knob_label($Attack, "Atk")
+  make_persistent($Attack)
+  
+  { Release Knob — include if controls.release === true }
+  declare ui_knob $Release (0, 1000000, 1)
+  $Release := [DEFAULT_RELEASE_SCALED]
+  set_knob_defval($Release, $Release)
+  set_knob_unit($Release, $KNOB_UNIT_NONE)
+  set_knob_label($Release, "Rel")
+  make_persistent($Release)
+  
+  { Tune Knob — include if controls.tune === true }
+  declare ui_knob $Tune (-36000, 36000, 1)
+  $Tune := 0
+  set_knob_defval($Tune, 0)
+  set_knob_unit($Tune, $KNOB_UNIT_NONE)
+  set_knob_label($Tune, "Tune")
+  make_persistent($Tune)
+  
+  { Cutoff Knob — include if controls.cutoff === true }
+  declare ui_knob $Cutoff (0, 1000000, 1)
+  $Cutoff := [DEFAULT_CUTOFF_SCALED]
+  set_knob_defval($Cutoff, $Cutoff)
+  set_knob_unit($Cutoff, $KNOB_UNIT_NONE)
+  set_knob_label($Cutoff, "Cut")
+  make_persistent($Cutoff)
+  
+  { Resonance Knob — include if controls.resonance === true }
+  declare ui_knob $Resonance (0, 1000000, 1)
+  $Resonance := [DEFAULT_RES_SCALED]
+  set_knob_defval($Resonance, $Resonance)
+  set_knob_unit($Resonance, $KNOB_UNIT_NONE)
+  set_knob_label($Resonance, "Res")
+  make_persistent($Resonance)
+  
+  { Reverb Send Knob — include if controls.reverb === true }
+  declare ui_knob $ReverbSend (0, 1000000, 1)
+  $ReverbSend := [DEFAULT_REVERB_SCALED]
+  set_knob_defval($ReverbSend, $ReverbSend)
+  set_knob_unit($ReverbSend, $KNOB_UNIT_NONE)
+  set_knob_label($ReverbSend, "Rvb")
+  make_persistent($ReverbSend)
+  
+  
+  { ── Zone Mapping ───────────────────────────────────────── }
+  { This section is ALWAYS included. It maps every zone to   }
+  { the correct MIDI key range and velocity range.           }
+  {                                                          }
+  { APPROACH: Iterate all zones, read each zone's sample     }
+  { name, and set mapping parameters. This works regardless  }
+  { of how the user loaded samples into Kontakt's editor.    }
+  
+  declare $i
+  declare $zone_id
+  declare @zone_name
+  declare $num_zones
+  
+  $num_zones := $NUM_ZONES
+  $i := 0
+  
+  while ($i < $num_zones)
+    $zone_id := get_zone_id($i)
+    @zone_name := zone_get_sample_name($zone_id)
+    
+    { ── Per-Zone Mapping ── }
+    { The generator outputs one if/else block per sample file.     }
+    { It matches the zone's sample name against the known files.   }
+    { This is verbose but simple and guaranteed to work.            }
+    
+    { EXAMPLE — the generator produces blocks like these: }
+    
+    if (@zone_name = "Kantele_Plucked_C3_v1_rr1")
+      set_zone_par($zone_id, $ZONE_PAR_ROOT_KEY, 60)
+      set_zone_par($zone_id, $ZONE_PAR_LOW_KEY, 57)
+      set_zone_par($zone_id, $ZONE_PAR_HIGH_KEY, 61)
+      set_zone_par($zone_id, $ZONE_PAR_LOW_VELO, 0)
+      set_zone_par($zone_id, $ZONE_PAR_HIGH_VELO, 63)
+      set_zone_par($zone_id, $ZONE_PAR_GROUP, 0)
+    end if
+    
+    if (@zone_name = "Kantele_Plucked_C3_v2_rr1")
+      set_zone_par($zone_id, $ZONE_PAR_ROOT_KEY, 60)
+      set_zone_par($zone_id, $ZONE_PAR_LOW_KEY, 57)
+      set_zone_par($zone_id, $ZONE_PAR_HIGH_KEY, 61)
+      set_zone_par($zone_id, $ZONE_PAR_LOW_VELO, 64)
+      set_zone_par($zone_id, $ZONE_PAR_HIGH_VELO, 127)
+      set_zone_par($zone_id, $ZONE_PAR_GROUP, 0)
+    end if
+    
+    if (@zone_name = "Kantele_Plucked_E3_v1_rr1")
+      set_zone_par($zone_id, $ZONE_PAR_ROOT_KEY, 64)
+      set_zone_par($zone_id, $ZONE_PAR_LOW_KEY, 62)
+      set_zone_par($zone_id, $ZONE_PAR_HIGH_KEY, 65)
+      set_zone_par($zone_id, $ZONE_PAR_LOW_VELO, 0)
+      set_zone_par($zone_id, $ZONE_PAR_HIGH_VELO, 127)
+      set_zone_par($zone_id, $ZONE_PAR_GROUP, 0)
+    end if
+    
+    { ... one block per sample file ... }
+    
+    $i := $i + 1
+  end while
+  
+  
+  { ── Effects Chain ──────────────────────────────────────── }
+  { Only include effects that are enabled in template config. }
+  
+  { Filter — include if fx.filter === true }
+  set_engine_par($ENGINE_PAR_EFFECT_TYPE, $EFFECT_TYPE_FILTER, 0, 0, -1)
+  set_engine_par($ENGINE_PAR_EFFECT_SUBTYPE, 1, 0, 0, -1)
+  
+  { EQ — include if fx.eq === true }
+  { Note: Kontakt's parametric EQ is limited in KSP. }
+  { For MVP, skip EQ insertion and document as V1.1 feature. }
+  
+  { Reverb — include if fx.reverb === true }
+  set_engine_par($ENGINE_PAR_EFFECT_TYPE, $EFFECT_TYPE_REVERB, -1, 0, 1)
+  
+  { Delay — include if fx.delay === true }
+  set_engine_par($ENGINE_PAR_EFFECT_TYPE, $EFFECT_TYPE_DELAY, -1, 1, 1)
+
+end on
+
+
+{ ── UI Control Handlers ─────────────────────────────────── }
+{ One handler per enabled knob.                              }
+
+on ui_control ($Volume)
+  set_engine_par($ENGINE_PAR_VOLUME, $Volume * 630 / 1000000, -1, -1, -1)
+end on
+
+on ui_control ($Pan)
+  set_engine_par($ENGINE_PAR_PAN, $Pan, -1, -1, -1)
+end on
+
+on ui_control ($Attack)
+  set_engine_par($ENGINE_PAR_ATTACK, $Attack, -1, -1, -1)
+end on
+
+on ui_control ($Release)
+  set_engine_par($ENGINE_PAR_RELEASE, $Release, -1, -1, -1)
+end on
+
+on ui_control ($Tune)
+  set_engine_par($ENGINE_PAR_TUNE, $Tune, -1, -1, -1)
+end on
+
+on ui_control ($Cutoff)
+  set_engine_par($ENGINE_PAR_CUTOFF, $Cutoff, 0, 0, -1)
+end on
+
+on ui_control ($Resonance)
+  set_engine_par($ENGINE_PAR_RESONANCE, $Resonance, 0, 0, -1)
+end on
+
+on ui_control ($ReverbSend)
+  set_engine_par($ENGINE_PAR_SEND_EFFECT_0_LEVEL, $ReverbSend * 630 / 1000000, -1, -1, -1)
+end on
+
+
+{ ── Round Robin Cycling ─────────────────────────────────── }
+{ Include this section ONLY if any samples have rr > 1.     }
+{ For MVP, this can be cut if running out of time.          }
+{                                                            }
+{ The approach: assign each round robin variant to a         }
+{ different group. On each note, cycle through groups.       }
+
+on note
+  { Simple global RR counter — cycles through N groups }
+  declare $rr_counter
+  $rr_counter := ($rr_counter + 1) mod [MAX_RR_COUNT]
+  
+  declare $g
+  $g := 0
+  while ($g < [NUM_GROUPS])
+    if ($g = $rr_counter)
+      allow_group($g)
+    else
+      disallow_group($g)
+    end if
+    $g := $g + 1
+  end while
+end on
+
+
+{ ──────────────────────────────────────────────────────────── }
+{ GENERATOR IMPLEMENTATION NOTES:                              }
+{                                                              }
+{ 1. The zone mapping uses sample names WITHOUT the .wav       }
+{    extension. Kontakt strips the extension internally.       }
+{                                                              }
+{ 2. set_zone_par GROUP assignment:                            }
+{    - If no round robins: all zones go to group 0             }
+{    - If round robins: rr1 → group 0, rr2 → group 1, etc.   }
+{                                                              }
+{ 3. The on note RR cycling section should only be included    }
+{    if maxRoundRobin > 1 across all samples.                  }
+{                                                              }
+{ 4. Effect slot indices:                                      }
+{    - Group insert FX: set_engine_par(..., group, slot, -1)   }
+{      slot 0 = Filter, slot 1 = EQ                           }
+{    - Instrument send FX: set_engine_par(..., -1, slot, 1)    }
+{      slot 0 = Reverb, slot 1 = Delay                        }
+{                                                              }
+{ 5. KSP knob value ranges don't directly map to user-facing   }
+{    0-100 values. The generator should scale:                 }
+{    - Volume 75/100 → 750000                                 }
+{    - Attack 10/100 → 100000                                 }
+{    - etc.                                                    }
+{                                                              }
+{ 6. zone_get_sample_name() returns the filename without       }
+{    path and without extension. So "Kantele_Plucked_C3_v1_rr1" }
+{    not "Samples/Plucked/Kantele_Plucked_C3_v1_rr1.wav"      }
+{                                                              }
+{ 7. If the generated script has more than ~1000 if/else       }
+{    blocks (unlikely for MVP), Kontakt may reject it.         }
+{    This is not a concern for typical instruments (< 200      }
+{    samples) but should be noted for future optimization.     }
+{ ──────────────────────────────────────────────────────────── }

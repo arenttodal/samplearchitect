@@ -1,0 +1,43 @@
+{
+  "id": "chromatic",
+  "name": "Chromatic Instrument",
+  "description": "Standard chromatic sampled instrument with macro controls and FX chain",
+  "version": "1.0",
+
+  "controls": {
+    "volume":    { "label": "Volume",    "default": 75,  "kspParam": "ENGINE_PAR_VOLUME",     "min": 0, "max": 1000000, "unit": "none" },
+    "pan":       { "label": "Pan",       "default": 50,  "kspParam": "ENGINE_PAR_PAN",        "min": -1000, "max": 1000, "unit": "none" },
+    "attack":    { "label": "Attack",    "default": 10,  "kspParam": "ENGINE_PAR_ATTACK",     "min": 0, "max": 1000000, "unit": "us" },
+    "release":   { "label": "Release",   "default": 35,  "kspParam": "ENGINE_PAR_RELEASE",    "min": 0, "max": 1000000, "unit": "us" },
+    "tune":      { "label": "Tune",      "default": 50,  "kspParam": "ENGINE_PAR_TUNE",       "min": -36000, "max": 36000, "unit": "mc" },
+    "cutoff":    { "label": "Cutoff",    "default": 80,  "kspParam": "ENGINE_PAR_CUTOFF",     "min": 0, "max": 1000000, "unit": "hz" },
+    "resonance": { "label": "Res",       "default": 20,  "kspParam": "ENGINE_PAR_RESONANCE",  "min": 0, "max": 1000000, "unit": "none" },
+    "reverb":    { "label": "Reverb",    "default": 30,  "kspParam": "ENGINE_PAR_SEND_EFFECT_0_LEVEL", "min": 0, "max": 1000000, "unit": "none" }
+  },
+
+  "effects": {
+    "filter":  { "label": "Filter",  "description": "LP / HP / BP",       "kspType": "EFFECT_TYPE_FILTER",  "slot": "group_insert_0" },
+    "eq":      { "label": "EQ",      "description": "2-band parametric",  "kspType": "EFFECT_TYPE_PARA_EQ", "slot": "group_insert_1" },
+    "reverb":  { "label": "Reverb",  "description": "Algorithmic",        "kspType": "EFFECT_TYPE_REVERB",  "slot": "instrument_send_0" },
+    "delay":   { "label": "Delay",   "description": "Tempo-synced",       "kspType": "EFFECT_TYPE_DELAY",   "slot": "instrument_send_1" }
+  },
+
+  "defaultsEnabled": {
+    "controls": {
+      "volume": true,
+      "pan": true,
+      "attack": true,
+      "release": true,
+      "tune": true,
+      "cutoff": true,
+      "resonance": true,
+      "reverb": true
+    },
+    "effects": {
+      "filter": true,
+      "eq": true,
+      "reverb": true,
+      "delay": true
+    }
+  }
+}
