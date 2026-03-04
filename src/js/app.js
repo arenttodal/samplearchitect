@@ -587,7 +587,6 @@ function renderPhase3() {
   renderFxChain();
   renderControlToggles();
   renderEffectToggles();
-  renderKnobStylePicker();
 }
 
 function renderKnobGrid() {
@@ -747,40 +746,6 @@ function renderEffectToggles() {
     });
 
     panel.appendChild(toggle);
-  });
-}
-
-function renderKnobStylePicker() {
-  var picker = document.getElementById('knobStylePicker');
-  picker.innerHTML = '';
-
-  var styles = [
-    { key: 'gray', label: 'Gray', desc: 'Subtle, professional' },
-    { key: 'green', label: 'Green', desc: 'SampleArchitect accent' },
-    { key: 'ice', label: 'Ice', desc: 'Cool blue tone' }
-  ];
-
-  styles.forEach(function(s) {
-    var opt = document.createElement('div');
-    opt.className = 'knob-style-option' + (templateConfig.knobStyle === s.key ? ' selected' : '');
-
-    var dot = document.createElement('div');
-    dot.className = 'knob-style-dot knob-style-' + s.key;
-
-    var info = document.createElement('div');
-    info.className = 'knob-style-info';
-    info.innerHTML = '<div class="knob-style-name">' + s.label + '</div>' +
-                     '<div class="knob-style-desc">' + s.desc + '</div>';
-
-    opt.appendChild(dot);
-    opt.appendChild(info);
-
-    opt.addEventListener('click', function() {
-      templateConfig.knobStyle = s.key;
-      renderKnobStylePicker();
-    });
-
-    picker.appendChild(opt);
   });
 }
 
