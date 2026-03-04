@@ -4,6 +4,26 @@
 /* Stores the last generated KSP script for clipboard copy */
 var lastGeneratedKSP = '';
 
+/**
+ * Generate a Kontakt picture property .txt file.
+ * Exact format required by Kontakt resource container.
+ * LF line endings, trailing empty line.
+ */
+function generatePictureTxt(numAnimations) {
+  return [
+    'Has Alpha Channel: yes',
+    'Number of Animations: ' + numAnimations,
+    'Horizontal Animation: no',
+    'Vertical Resizable: no',
+    'Horizontal Resizable: no',
+    'Fixed Top: 0',
+    'Fixed Bottom: 0',
+    'Fixed Left: 0',
+    'Fixed Right: 0',
+    ''
+  ].join('\n');
+}
+
 async function exportInstrument(samples, stats, config, outputDir, onProgress) {
   var mapped = samples.filter(function(s) { return s.parsed; });
   var instrumentName = stats.instrument || 'Instrument';
@@ -78,7 +98,7 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
   // Stage 5: Generate resource container assets (wallpaper + knob skin)
   onProgress(4, stages[4]);
 
-  var wallpaperBytes = await generateWallpaper(instrumentName, mapped.length);
+  var wallpaperBytes = await generateWallpaper(instrumentName, mapped.length, getEnabledControls());
   await window.__TAURI__.core.invoke('write_file_bytes', {
     path: basePath + '/Resources/pictures/wallpaper.png',
     bytes: Array.from(wallpaperBytes)
@@ -87,19 +107,19 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
 
   await window.__TAURI__.core.invoke('write_text_file', {
     path: basePath + '/Resources/pictures/wallpaper.txt',
-    contents: 'has_alpha,  frames,  height, width, vert\n1,          1,       500,    633,   1\n'
+    contents: generatePictureTxt(0)
   });
 
-  var knobBytes = await generateKnobStrip();
+  var knobBytes = getKnobPngBytes();
   await window.__TAURI__.core.invoke('write_file_bytes', {
-    path: basePath + '/Resources/pictures/sa_knob.png',
+    path: basePath + '/Resources/pictures/knob.png',
     bytes: Array.from(knobBytes)
   });
-  console.log('[SampleArchitect] sa_knob.png written (' + knobBytes.length + ' bytes) to ' + basePath + '/Resources/pictures/sa_knob.png');
+  console.log('[SampleArchitect] knob.png written (' + knobBytes.length + ' bytes, static asset) to ' + basePath + '/Resources/pictures/knob.png');
 
   await window.__TAURI__.core.invoke('write_text_file', {
-    path: basePath + '/Resources/pictures/sa_knob.txt',
-    contents: 'has_alpha,  frames,  height, width, vert\n1,          128,     54,     54,    1\n'
+    path: basePath + '/Resources/pictures/knob.txt',
+    contents: generatePictureTxt(128)
   });
 
   // Stage 6-7: Generate and write KSP script as .txt
@@ -197,7 +217,7 @@ function generateSetupGuide(samples, stats, config, outputPath, instrumentName) 
     '',
     '9. The script adds:',
     '   - Custom wallpaper background (rendered from Resources/pictures/wallpaper.png)',
-    '   - Custom knob skins (rendered from Resources/pictures/sa_knob.png)',
+    '   - Custom knob skins (rendered from Resources/pictures/knob.png)',
     '   - UI control knobs (' + (enabledCtrls.length > 0 ? enabledCtrls.join(', ') : 'None configured') + ')',
     '   - The script does NOT remap zones — Kontakt handles that from filenames',
     '',
@@ -221,8 +241,8 @@ function generateSetupGuide(samples, stats, config, outputPath, instrumentName) 
     '  ├── pictures/',
     '  │   ├── wallpaper.png    (633×500 instrument background)',
     '  │   ├── wallpaper.txt    (property file for wallpaper)',
-    '  │   ├── sa_knob.png      (128-frame knob strip)',
-    '  │   └── sa_knob.txt      (property file for knob skin)',
+    '  │   ├── knob.png      (128-frame knob strip)',
+    '  │   └── knob.txt      (property file for knob skin)',
     '  └── scripts/',
     '      └── ' + instrumentName + '_script.txt',
     '',
@@ -270,7 +290,7 @@ function generateSetupGuide(samples, stats, config, outputPath, instrumentName) 
     '"Missing wallpaper or knob graphics"',
     '> Re-link the Resource Container in Instrument Options (step 6 above)',
     '> Make sure the Resources/ folder is next to the Samples/ folder',
-    '> The pictures/ subfolder must contain wallpaper.png and sa_knob.png',
+    '> The pictures/ subfolder must contain wallpaper.png and knob.png',
     '',
     '',
     '================================================================================',

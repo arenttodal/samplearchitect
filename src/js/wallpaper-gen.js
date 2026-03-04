@@ -3,13 +3,16 @@
 
 /**
  * Generate a dark wallpaper PNG for Kontakt's resource container.
+ * Bakes control labels into the wallpaper image (no separate ui_label controls).
  * Returns a Uint8Array of PNG data.
  *
  * @param {string} instrumentName - Instrument name to render
  * @param {number} sampleCount - Number of mapped samples
+ * @param {Array} enabledControls - Array of enabled control objects (from getEnabledControls)
  * @returns {Promise<Uint8Array>} PNG bytes
  */
-async function generateWallpaper(instrumentName, sampleCount) {
+async function generateWallpaper(instrumentName, sampleCount, enabledControls) {
+  enabledControls = enabledControls || [];
   var width = 633;
   var height = 500;
 
@@ -59,6 +62,29 @@ async function generateWallpaper(instrumentName, sampleCount) {
   ctx.font = '400 9px Inter, Arial, sans-serif';
   ctx.textAlign = 'left';
   ctx.fillText(sampleCount + ' samples', 20, 178);
+
+  // Bake control labels into the wallpaper (matches ksp-gen.js layout)
+  if (enabledControls.length > 0) {
+    var startX = 30;
+    var knobY = 200;
+    var labelSpacing = 75;
+    var maxPerRow = 6;
+    var knobSize = 54;
+
+    ctx.fillStyle = '#666666';
+    ctx.font = '600 10px Inter, Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+
+    enabledControls.forEach(function(item, index) {
+      var row = Math.floor(index / maxPerRow);
+      var col = index % maxPerRow;
+      var x = startX + (col * labelSpacing) + (knobSize / 2);
+      var y = knobY + (row * 110) + 62;
+      var label = (KNOB_FULL_LABELS[item.key] || item.key).toUpperCase();
+      ctx.fillText(label, x, y);
+    });
+  }
 
   // Export to PNG
   var blob;
