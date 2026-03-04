@@ -1,9 +1,15 @@
 /* exporter.js — Folder structure + file writer */
 
+/* Stores the last generated KSP script for clipboard copy */
+var lastGeneratedKSP = '';
+
 async function exportInstrument(samples, stats, config, outputDir, onProgress) {
   var mapped = samples.filter(function(s) { return s.parsed; });
   var instrumentName = stats.instrument || 'Instrument';
-  var basePath = outputDir + '/' + instrumentName + '_SampleArchitect';
+
+  /* Fix 3: The save dialog returns the full target path already.
+     Don't append instrumentName again — use outputDir directly as basePath. */
+  var basePath = outputDir;
 
   var stages = [
     'Creating folder structure',
@@ -11,7 +17,7 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     'Copying sample files',
     'Copying sample files',
     'Generating KSP script',
-    'Writing KSP script',
+    'Writing script file',
     'Creating setup guide',
     'Finalizing'
   ];
@@ -49,19 +55,20 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     });
   }
 
-  // Stage 5-6: Generate and write KSP
+  // Stage 5-6: Generate and write KSP script as .txt
   onProgress(4, stages[4]);
   var kspScript = generateKSP(mapped, stats, config);
+  lastGeneratedKSP = kspScript;
 
   onProgress(5, stages[5]);
   await window.__TAURI__.core.invoke('write_text_file', {
-    path: basePath + '/Scripts/' + instrumentName + '.ksp',
+    path: basePath + '/Scripts/' + instrumentName + '_script.txt',
     contents: kspScript
   });
 
   // Stage 7: Setup guide
   onProgress(6, stages[6]);
-  var guide = generateSetupGuide(mapped, stats, config, basePath);
+  var guide = generateSetupGuide(mapped, stats, config, basePath, instrumentName);
   await window.__TAURI__.core.invoke('write_text_file', {
     path: basePath + '/Setup Guide.txt',
     contents: guide
@@ -73,10 +80,9 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
   return basePath;
 }
 
-function generateSetupGuide(samples, stats, config, outputPath) {
-  var instrumentName = stats.instrument || 'Instrument';
+function generateSetupGuide(samples, stats, config, outputPath, instrumentName) {
+  instrumentName = instrumentName || stats.instrument || 'Instrument';
   var enabledCtrls = getEnabledControls().map(function(c) { return c.config.label; });
-  var enabledFx = getEnabledEffects().map(function(f) { return f.config.label; });
 
   // Build sample map table
   var tableLines = [];
@@ -103,48 +109,47 @@ function generateSetupGuide(samples, stats, config, outputPath) {
     '',
     '1. Open Kontakt (standalone or as a plugin in your DAW)',
     '',
-    '2. Click the "Files" tab in the left sidebar',
+    '2. Create a new empty instrument:',
+    '   - Go to File > New Instrument',
+    '   - Or right-click in the instrument rack and select "New Instrument"',
     '',
-    '3. Navigate to this folder:',
-    '   ' + outputPath,
-    '',
-    '4. Go to File > New Instrument (or right-click in the rack > New Instrument)',
-    '',
-    '5. Open the Mapping Editor:',
-    '   - Click the wrench icon (Instrument Edit Mode)',
+    '3. Open the Mapping Editor:',
+    '   - Click the wrench icon to enter Instrument Edit Mode',
     '   - The Mapping Editor panel should be visible at the bottom',
     '',
-    '6. Select all sample files from the Samples/ folder:',
-    '   - In your file browser, navigate to the Samples/ subfolder',
+    '4. Drag ALL sample files into the Mapping Editor:',
+    '   - Navigate to the Samples/ folder in this export',
     '   - Select ALL .wav files across all articulation subfolders',
     '   - Drag them into the Mapping Editor zone area',
-    '   - When prompted, choose "Auto-Map" or just drop them — the script will remap',
+    '   - Kontakt will auto-map them by reading note names from the filenames',
     '',
-    '7. Open the Script Editor:',
+    '5. Verify the auto-mapping:',
+    '   - In the Mapping Editor, check that each zone\'s Root Key matches',
+    '     the note in the filename (e.g. Kantele_Plucked_C3_v1_rr1 → C3)',
+    '   - Adjust any incorrect mappings manually if needed',
+    '',
+    '6. Open the Script Editor:',
     '   - Click the "Script" tab (scroll icon) in the instrument header',
     '   - Click on an empty script slot (e.g., "Script 1")',
     '   - Click "Edit" to open the code editor',
     '',
-    '8. Load the KSP script:',
-    '   - Open the file: Scripts/' + instrumentName + '.ksp',
-    '   - Select ALL the text (Ctrl+A / Cmd+A)',
-    '   - Copy it (Ctrl+C / Cmd+C)',
+    '7. Paste the KSP script:',
+    '   - Use the "Copy Script to Clipboard" button in SampleArchitect',
+    '   - Or open: Scripts/' + instrumentName + '_script.txt',
+    '   - Select ALL the text (Ctrl+A / Cmd+A) and copy it',
     '   - Paste into the Kontakt Script Editor (Ctrl+V / Cmd+V)',
     '   - Click "Apply"',
     '',
-    '9. The script will:',
-    '   - Remap all zones to the correct MIDI notes',
-    '   - Set velocity layer splits',
-    '   - Create UI knobs for your configured controls',
-    '   - Insert and configure effects',
-    '   - You should see a confirmation message in the Kontakt status bar',
+    '8. The script adds:',
+    '   - UI control knobs (' + (enabledCtrls.length > 0 ? enabledCtrls.join(', ') : 'None configured') + ')',
+    '   - The script does NOT remap zones — Kontakt handles that from filenames',
     '',
-    '10. Save your instrument:',
-    '    - File > Save As...',
-    '    - Choose a location and name',
-    '    - The instrument is now saved as a .nki file',
+    '9. Save your instrument:',
+    '   - File > Save As...',
+    '   - Choose a location and name',
+    '   - The instrument is now saved as a .nki file',
     '',
-    '11. Play!',
+    '10. Play!',
     '    - Set up a MIDI track in your DAW pointing to this Kontakt instance',
     '    - Play notes on your MIDI controller or piano roll',
     '    - Your sampled instrument should respond to velocity and pitch',
@@ -159,7 +164,6 @@ function generateSetupGuide(samples, stats, config, outputPath) {
     'Velocity Layers: ' + stats.maxVelocityLayers,
     'Round Robins:   ' + stats.maxRoundRobins,
     'Controls:       ' + (enabledCtrls.length > 0 ? enabledCtrls.join(', ') : 'None'),
-    'Effects:        ' + (enabledFx.length > 0 ? enabledFx.join(', ') : 'None'),
     '',
     '',
     'SAMPLE MAP',
@@ -175,12 +179,13 @@ function generateSetupGuide(samples, stats, config, outputPath) {
     '',
     '"No sound when I play"',
     '> Make sure you dragged the samples into the Mapping Editor, not just the Files tab',
-    '> Check the Script Editor — click "Apply" again',
     '> Verify MIDI input is reaching Kontakt (check the MIDI indicator)',
+    '> Check that zones are visible in the Mapping Editor',
     '',
     '"Wrong pitches"',
-    '> The script remaps zones on Apply. Try clicking Apply again.',
-    '> If zones still wrong, delete all zones, re-drag samples, re-apply script.',
+    '> Kontakt auto-maps from filenames. Verify the filenames follow the naming convention.',
+    '> In the Mapping Editor, check each zone\'s Root Key matches the expected note.',
+    '> You can manually drag zones to the correct keys if needed.',
     '',
     '"Script error on Apply"',
     '> Make sure you copied the ENTIRE script text (Ctrl+A before copying)',

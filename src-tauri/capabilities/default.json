@@ -16,6 +16,11 @@
     "dialog:allow-save",
     "dialog:allow-message",
     "shell:default",
-    "shell:allow-open"
+    {
+      "identifier": "shell:allow-open",
+      "allow": [
+        { "path": "**" }
+      ]
+    }
   ]
 }

@@ -212,15 +212,16 @@ function renderSampleDetail() {
   }
 
   if (sample.parsed) {
+    var keyRange = (sample.lowKey != null && sample.highKey != null) ? (sample.lowKey + '\u2013' + sample.highKey) : '\u2014';
     container.innerHTML =
       '<div class="inner-panel">' +
       '<div class="detail-grid">' +
       '<div class="detail-item"><span class="label">NOTE</span><div class="value">' + formatNoteName(sample.note, sample.accidental, sample.octave) + '</div></div>' +
-      '<div class="detail-item"><span class="label">MIDI</span><div class="value">' + sample.midiNote + '</div></div>' +
-      '<div class="detail-item"><span class="label">VELOCITY</span><div class="value">' + sample.velocityLayer + '</div></div>' +
-      '<div class="detail-item"><span class="label">ARTICULATION</span><div class="value">' + sample.articulation + '</div></div>' +
-      '<div class="detail-item"><span class="label">ROUND ROBIN</span><div class="value">' + sample.roundRobin + '</div></div>' +
-      '<div class="detail-item"><span class="label">KEY RANGE</span><div class="value">' + sample.lowKey + '–' + sample.highKey + '</div></div>' +
+      '<div class="detail-item"><span class="label">MIDI</span><div class="value">' + (sample.midiNote != null ? sample.midiNote : '\u2014') + '</div></div>' +
+      '<div class="detail-item"><span class="label">VELOCITY</span><div class="value">' + (sample.velocityLayer || '\u2014') + '</div></div>' +
+      '<div class="detail-item"><span class="label">ARTICULATION</span><div class="value">' + (sample.articulation || '\u2014') + '</div></div>' +
+      '<div class="detail-item"><span class="label">ROUND ROBIN</span><div class="value">' + (sample.roundRobin || '\u2014') + '</div></div>' +
+      '<div class="detail-item"><span class="label">KEY RANGE</span><div class="value">' + keyRange + '</div></div>' +
       '</div>' +
       '<div class="detail-actions">' +
       '<button class="btn-secondary" id="btnPreview">Preview</button>' +
@@ -547,13 +548,13 @@ async function doBuild() {
     var progress = document.getElementById('progressContainer');
     progress.classList.add('visible');
 
-    await exportInstrument(state.samples, stats, templateConfig, result, function(stageIdx, label) {
+    var exportResult = await exportInstrument(state.samples, stats, templateConfig, result, function(stageIdx, label) {
       var pct = ((stageIdx + 1) / 8) * 100;
       document.getElementById('progressFill').style.width = pct + '%';
       document.getElementById('progressLabel').textContent = label;
     });
 
-    state.outputPath = result + '/' + stats.instrument + '_SampleArchitect';
+    state.outputPath = exportResult;
 
     // Show completion
     progress.classList.remove('visible');
@@ -596,6 +597,24 @@ document.addEventListener('DOMContentLoaded', function() {
   // Phase 4 build
   document.getElementById('btnBuild').addEventListener('click', function() {
     doBuild();
+  });
+
+  // Phase 4 copy script to clipboard
+  document.getElementById('btnCopyScript').addEventListener('click', function() {
+    var btn = document.getElementById('btnCopyScript');
+    if (lastGeneratedKSP) {
+      navigator.clipboard.writeText(lastGeneratedKSP).then(function() {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(function() {
+          btn.textContent = 'Copy Script to Clipboard';
+          btn.classList.remove('copied');
+        }, 2000);
+      }).catch(function(err) {
+        console.error('Clipboard copy failed:', err);
+        btn.textContent = 'Copy failed';
+      });
+    }
   });
 
   // Phase 4 open folder
