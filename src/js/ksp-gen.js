@@ -101,8 +101,6 @@ function generateKSP(samples, stats, config) {
     lines.push('  make_persistent($' + varName + ')');
     lines.push('  set_control_par(get_ui_id($' + varName + '), $CONTROL_PAR_POS_X, ' + x + ')');
     lines.push('  set_control_par(get_ui_id($' + varName + '), $CONTROL_PAR_POS_Y, ' + y + ')');
-    lines.push('  set_control_par(get_ui_id($' + varName + '), $CONTROL_PAR_WIDTH, 54)');
-    lines.push('  set_control_par(get_ui_id($' + varName + '), $CONTROL_PAR_HEIGHT, 54)');
     lines.push('  set_control_par_str(get_ui_id($' + varName + '), $CONTROL_PAR_PICTURE, "sa_knob")');
   });
 
