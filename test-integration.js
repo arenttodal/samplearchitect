@@ -183,31 +183,42 @@ assert('no * 10',    !ksp.includes('* 10'));
 
 // ── Test 15: GUI Skin — Performance View Setup ──
 console.log('\n=== Test 15: GUI Skin (Performance View) ===');
-assert('has make_perfview',     ksp.includes('make_perfview'));
+
+// make_perfview must be the very first command after on init
+const initIdx = lines.findIndex(l => l.trim() === 'on init');
+const firstCmdAfterInit = lines.slice(initIdx + 1).find(l => l.trim() !== '' && !l.trim().startsWith('{'));
+assert('make_perfview is first command', firstCmdAfterInit && firstCmdAfterInit.trim() === 'make_perfview');
+
 assert('has set_ui_height_px',  ksp.includes('set_ui_height_px('));
-assert('has set_skin_offset',   ksp.includes('set_skin_offset(0)'));
+assert('has set_ui_color',      ksp.includes('set_ui_color(ff0a0a0bh)'));
+assert('has message("")',       ksp.includes('message("")'));
+assert('no set_skin_offset',    !ksp.includes('set_skin_offset'));
 
-// ── Test 16: GUI Skin — Knob Positioning ──
-console.log('\n=== Test 16: Knob Positioning ===');
-assert('has CONTROL_PAR_POS_X', ksp.includes('$CONTROL_PAR_POS_X'));
-assert('has CONTROL_PAR_POS_Y', ksp.includes('$CONTROL_PAR_POS_Y'));
-assert('has get_ui_id',         ksp.includes('get_ui_id($'));
+// ── Test 16: GUI Skin — Title Label + Knob Positioning ──
+console.log('\n=== Test 16: Title Label + Knob Positioning ===');
+assert('has ui_label $title',            ksp.includes('declare ui_label $title'));
+assert('has set_text title',             ksp.includes('set_text($title, "Test")'));
+assert('has CONTROL_PAR_TEXT_ALIGNMENT', ksp.includes('$CONTROL_PAR_TEXT_ALIGNMENT'));
+assert('has CONTROL_PAR_FONT_TYPE',      ksp.includes('$CONTROL_PAR_FONT_TYPE'));
+assert('has CONTROL_PAR_POS_X',          ksp.includes('$CONTROL_PAR_POS_X'));
+assert('has CONTROL_PAR_POS_Y',          ksp.includes('$CONTROL_PAR_POS_Y'));
+assert('has get_ui_id',                  ksp.includes('get_ui_id($'));
 
-// Verify all 8 knobs have position set (X and Y for each)
+// Verify all 8 knobs have position set (X and Y for each) — title label also has X/Y so +1
 const posXMatches = (ksp.match(/\$CONTROL_PAR_POS_X/g) || []).length;
 const posYMatches = (ksp.match(/\$CONTROL_PAR_POS_Y/g) || []).length;
-assert('8 knob X positions', posXMatches === 8);
-assert('8 knob Y positions', posYMatches === 8);
+assert('9 POS_X (8 knobs + title)', posXMatches === 9);
+assert('9 POS_Y (8 knobs + title)', posYMatches === 9);
 
 // Verify 2-row layout for 8 knobs (more than 6 = 2 rows)
 assert('330px height for 8 knobs', ksp.includes('set_ui_height_px(330)'));
 
-// Verify specific knob positions
+// Verify specific knob positions (Y=40 for row 1, Y=120 for row 2)
 assert('Volume at X=20',  ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_X, 20'));
-assert('Volume at Y=50',  ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_Y, 50'));
+assert('Volume at Y=40',  ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_Y, 40'));
 assert('Pan at X=120',    ksp.includes('get_ui_id($Pan), $CONTROL_PAR_POS_X, 120'));
 assert('Reverb at X=120', ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_X, 120'));
-assert('Reverb at Y=130', ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_Y, 130'));
+assert('Reverb at Y=120', ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_Y, 120'));
 
 // ── Test 17: GUI Skin — Verify layout with fewer knobs ──
 console.log('\n=== Test 17: GUI Skin (Fewer Knobs) ===');
@@ -229,7 +240,7 @@ context.templateConfig.controls.release.enabled = true;
 const ksp4 = vm.runInContext('generateKSP(samples, stats, templateConfig)', context);
 assert('4 knobs: 250px height', ksp4.includes('set_ui_height_px(250)'));
 const posX4 = (ksp4.match(/\$CONTROL_PAR_POS_X/g) || []).length;
-assert('4 knobs: 4 X positions', posX4 === 4);
+assert('4 knobs: 5 POS_X (4 knobs + title)', posX4 === 5);
 assert('4 knobs: Attack at X=220', ksp4.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 220'));
 
 // Restore
