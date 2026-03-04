@@ -25,18 +25,5 @@
     "security": {
       "csp": null
     }
-  },
-  "plugins": {
-    "fs": {
-      "scope": {
-        "allow": ["**"]
-      }
-    },
-    "dialog": {
-      "all": true
-    },
-    "shell": {
-      "open": true
-    }
   }
 }
