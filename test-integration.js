@@ -212,6 +212,12 @@ assert('has get_ui_id',                  ksp.includes('get_ui_id($'));
 const knobPicMatches = (ksp.match(/set_control_par_str\(get_ui_id\(\$\w+\), \$CONTROL_PAR_PICTURE, "sa_knob"\)/g) || []).length;
 assert('8 knob skin assignments', knobPicMatches === 8);
 
+// All 8 knobs have WIDTH=54 and HEIGHT=54 to match frame size
+const widthMatches = (ksp.match(/\$CONTROL_PAR_WIDTH, 54\)/g) || []).length;
+const heightMatches = (ksp.match(/\$CONTROL_PAR_HEIGHT, 54\)/g) || []).length;
+assert('8 knob WIDTH=54', widthMatches === 8);
+assert('8 knob HEIGHT=54', heightMatches === 8);
+
 // 8 knobs have POS_X and POS_Y (no title label anymore)
 const posXMatches = (ksp.match(/\$CONTROL_PAR_POS_X/g) || []).length;
 const posYMatches = (ksp.match(/\$CONTROL_PAR_POS_Y/g) || []).length;
