@@ -53,8 +53,8 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     var stageIdx = Math.min(3, 1 + Math.floor((i / mapped.length) * 3));
     onProgress(stageIdx, stages[stageIdx]);
 
-    // If sample has trim data, write trimmed WAV; otherwise plain copy
-    if (s.trimStartSample != null && s.trimEndSample != null && s.silenceRemoved > 0.01) {
+    // Only apply trim if user explicitly approved it
+    if (s.trimApproved && s.trimStartSample != null && s.trimEndSample != null && s.silenceRemoved > 0.01) {
       var rawBytes = await window.__TAURI__.core.invoke('read_file_bytes', { path: s.path });
       var trimmedBytes = trimWavBytes(rawBytes, s.trimStartSample, s.trimEndSample);
       await window.__TAURI__.core.invoke('write_file_bytes', {

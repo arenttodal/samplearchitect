@@ -170,8 +170,8 @@ function onMIDINoteOn(midiNote, velocity) {
   var sample = findSampleForMIDINote(midiNote, velocity);
   if (sample) {
     var velNorm = velocity / 127;
-    var trimStart = sample.trimStart !== undefined ? sample.trimStart : undefined;
-    var trimEnd = sample.trimEnd !== undefined ? sample.trimEnd : undefined;
+    var trimStart = (sample.trimApproved && sample.trimStart !== undefined) ? sample.trimStart : undefined;
+    var trimEnd = (sample.trimApproved && sample.trimEnd !== undefined) ? sample.trimEnd : undefined;
     playSampleWithVelocity(sample.path, velNorm, trimStart, trimEnd);
 
     // Highlight the key on the keyboard

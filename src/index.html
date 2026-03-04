@@ -95,8 +95,25 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
             <h3>Samples</h3>
             <div class="file-list-badges" id="fileBadges"></div>
           </div>
+          <div class="file-list-toolbar" id="fileListToolbar">
+            <button class="btn-secondary btn-sm" id="btnTrimAll">Trim All</button>
+          </div>
           <div class="validation-warning hidden" id="validationWarning"></div>
           <div class="file-list-scroll" id="fileListScroll"></div>
+        </div>
+
+        <!-- Trim All confirmation overlay -->
+        <div class="trim-all-overlay" id="trimAllOverlay">
+          <div class="card trim-all-dialog">
+            <div class="trim-all-header">
+              <span class="label-lg">BATCH TRIM</span>
+              <button class="btn-secondary btn-sm" id="trimAllCancel">Cancel</button>
+            </div>
+            <div class="trim-all-list" id="trimAllList"></div>
+            <div class="trim-all-footer">
+              <button class="btn-primary" id="trimAllApply" style="display:none;">Apply</button>
+            </div>
+          </div>
         </div>
 
         <!-- Right panel -->
