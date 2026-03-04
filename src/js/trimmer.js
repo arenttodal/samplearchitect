@@ -15,8 +15,9 @@ function findTrimPoints(audioBuffer, thresholdDb) {
   var trimStart = 0;
   for (var i = 0; i < data.length; i++) {
     if (Math.abs(data[i]) > startThreshold) {
-      // Leave 50ms pre-roll to preserve full attack transient
-      trimStart = Math.max(0, i - Math.floor(sampleRate * 0.05));
+      // Leave 100ms pre-roll to preserve full attack transient
+      // Better to keep a tiny bit of silence than clip the attack
+      trimStart = Math.max(0, i - Math.floor(sampleRate * 0.1));
       break;
     }
   }
