@@ -18,15 +18,16 @@ var KNOB_VAR_NAMES = {
   reverb: 'Reverb'
 };
 
+/* Label text for wallpaper baking (not used in KSP — labels are in the wallpaper PNG) */
 var KNOB_FULL_LABELS = {
-  volume: 'Volume',
-  pan: 'Pan',
-  attack: 'Attack',
-  release: 'Release',
-  tune: 'Tune',
-  cutoff: 'Cutoff',
-  resonance: 'Resonance',
-  reverb: 'Reverb'
+  volume: 'VOLUME',
+  pan: 'PAN',
+  attack: 'ATTACK',
+  release: 'RELEASE',
+  tune: 'TUNE',
+  cutoff: 'CUTOFF',
+  resonance: 'RESONANCE',
+  reverb: 'REVERB'
 };
 
 /* Convert ARGB hex color to signed 32-bit decimal for KSP */
@@ -60,9 +61,9 @@ function generateKSP(samples, stats, config) {
   var activeEffects = enabledEffects.filter(function(e) { return e.key !== 'eq'; });
 
   // Layout constants — sliders with knob skin below wallpaper title area
-  var startX = 28;
-  var knobY = 190;
-  var spacing = 90;
+  var startX = 30;
+  var knobY = 200;
+  var spacing = 75;
   var maxPerRow = 6;
   var numRows = enabledControls.length > 0 ? Math.ceil(enabledControls.length / maxPerRow) : 0;
   var uiHeight = numRows <= 1 ? 320 : 430;
@@ -95,19 +96,16 @@ function generateKSP(samples, stats, config) {
   enabledControls.forEach(function(item, index) {
     var key = item.key;
     var varName = KNOB_VAR_NAMES[key];
-    var fullLabel = KNOB_FULL_LABELS[key];
     var defaults = KNOB_DEFAULTS[key];
 
     var row = Math.floor(index / maxPerRow);
     var col = index % maxPerRow;
     var x = startX + (col * spacing);
     var y = knobY + (row * 110);
-    var labelX = x - 13;
-    var labelY = y + 58;
 
-    // Slider declaration
+    // Slider declaration — no companion label (labels baked into wallpaper)
     lines.push('');
-    lines.push('  { ' + fullLabel + ' }');
+    lines.push('  { ' + varName + ' }');
     lines.push('  declare ui_slider $' + varName + ' (0, 1000000)');
     lines.push('  $' + varName + ' := ' + defaults.value);
     lines.push('  make_persistent($' + varName + ')');
@@ -117,18 +115,7 @@ function generateKSP(samples, stats, config) {
     lines.push('  set_control_par(get_ui_id($' + varName + '), $CONTROL_PAR_HEIGHT, 54)');
     lines.push('  set_control_par(get_ui_id($' + varName + '), $CONTROL_PAR_MOUSE_BEHAVIOUR, -2000)');
     lines.push('  set_control_par(get_ui_id($' + varName + '), $CONTROL_PAR_DEFAULT_VALUE, ' + defaults.value + ')');
-    lines.push('  set_control_par_str(get_ui_id($' + varName + '), $CONTROL_PAR_PICTURE, "sa_knob")');
-
-    // Companion label below the slider
-    lines.push('');
-    lines.push('  declare ui_label $lbl_' + varName + ' (1, 1)');
-    lines.push('  set_text($lbl_' + varName + ', "' + fullLabel + '")');
-    lines.push('  set_control_par(get_ui_id($lbl_' + varName + '), $CONTROL_PAR_POS_X, ' + labelX + ')');
-    lines.push('  set_control_par(get_ui_id($lbl_' + varName + '), $CONTROL_PAR_POS_Y, ' + labelY + ')');
-    lines.push('  set_control_par(get_ui_id($lbl_' + varName + '), $CONTROL_PAR_WIDTH, 80)');
-    lines.push('  set_control_par(get_ui_id($lbl_' + varName + '), $CONTROL_PAR_HEIGHT, 18)');
-    lines.push('  set_control_par(get_ui_id($lbl_' + varName + '), $CONTROL_PAR_TEXT_ALIGNMENT, 1)');
-    lines.push('  hide_part($lbl_' + varName + ', $HIDE_PART_BG)');
+    lines.push('  set_control_par_str(get_ui_id($' + varName + '), $CONTROL_PAR_PICTURE, "knob")');
   });
 
   // Apply init defaults for group-level params (envelope params need group 0)

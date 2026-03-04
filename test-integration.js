@@ -202,7 +202,7 @@ assert('no set_skin_offset',    !ksp.includes('set_skin_offset'));
 // ── Test 16: V1.1b — Wallpaper + Slider Knob Skin References ──
 console.log('\n=== Test 16: Wallpaper + Slider Knob Skin (V1.1b) ===');
 assert('has wallpaper reference',   ksp.includes('set_control_par_str($INST_WALLPAPER_ID, $CONTROL_PAR_PICTURE, "wallpaper")'));
-assert('has knob skin reference',   ksp.includes('set_control_par_str(get_ui_id($Volume), $CONTROL_PAR_PICTURE, "sa_knob")'));
+assert('has knob skin reference',   ksp.includes('set_control_par_str(get_ui_id($Volume), $CONTROL_PAR_PICTURE, "knob")'));
 assert('no ui_label $title',        !ksp.includes('declare ui_label $title'));
 assert('no set_text($title',        !ksp.includes('set_text($title'));
 assert('no CONTROL_PAR_FONT_TYPE',      !ksp.includes('$CONTROL_PAR_FONT_TYPE'));
@@ -210,8 +210,8 @@ assert('has $CONTROL_PAR_POS_X',         ksp.includes('$CONTROL_PAR_POS_X'));
 assert('has $CONTROL_PAR_POS_Y',         ksp.includes('$CONTROL_PAR_POS_Y'));
 assert('has get_ui_id',                  ksp.includes('get_ui_id($'));
 
-// All 8 sliders have set_control_par_str for picture
-const knobPicMatches = (ksp.match(/set_control_par_str\(get_ui_id\(\$\w+\), \$CONTROL_PAR_PICTURE, "sa_knob"\)/g) || []).length;
+// All 8 sliders have set_control_par_str for picture "knob"
+const knobPicMatches = (ksp.match(/set_control_par_str\(get_ui_id\(\$\w+\), \$CONTROL_PAR_PICTURE, "knob"\)/g) || []).length;
 assert('8 knob skin assignments', knobPicMatches === 8);
 
 // ui_slider requires CONTROL_PAR_WIDTH/HEIGHT set to 54
@@ -226,28 +226,26 @@ assert('8 MOUSE_BEHAVIOUR', mouseBehavMatches === 8);
 const defaultValMatches = (ksp.match(/\$CONTROL_PAR_DEFAULT_VALUE/g) || []).length;
 assert('8 DEFAULT_VALUE', defaultValMatches === 8);
 
-// 8 sliders + 8 companion labels = 16 POS_X and 16 POS_Y
+// No companion labels — labels baked into wallpaper
+assert('no ui_label in KSP', !ksp.includes('ui_label'));
+assert('no hide_part in KSP', !ksp.includes('hide_part'));
+assert('no TEXT_ALIGNMENT in KSP', !ksp.includes('$CONTROL_PAR_TEXT_ALIGNMENT'));
+
+// 8 sliders only (no labels) = 8 POS_X and 8 POS_Y
 const posXMatches = (ksp.match(/\$CONTROL_PAR_POS_X/g) || []).length;
 const posYMatches = (ksp.match(/\$CONTROL_PAR_POS_Y/g) || []).length;
-assert('16 POS_X (8 sliders + 8 labels)', posXMatches === 16);
-assert('16 POS_Y (8 sliders + 8 labels)', posYMatches === 16);
-
-// 8 companion labels with hide_part and text alignment
-const labelMatches = (ksp.match(/declare ui_label \$lbl_/g) || []).length;
-assert('8 companion labels', labelMatches === 8);
-assert('has TEXT_ALIGNMENT for labels', ksp.includes('$CONTROL_PAR_TEXT_ALIGNMENT, 1'));
-const hidePartMatches = (ksp.match(/hide_part\(\$lbl_\w+, \$HIDE_PART_BG\)/g) || []).length;
-assert('8 hide_part for labels', hidePartMatches === 8);
+assert('8 POS_X (8 sliders, no labels)', posXMatches === 8);
+assert('8 POS_Y (8 sliders, no labels)', posYMatches === 8);
 
 // 430px height for 2 rows (8 sliders), 320px for 1 row
 assert('430px height for 2 rows', ksp.includes('set_ui_height_px(430)'));
 
-// Slider positions (startX=28, spacing=90, Y=190 for row 1, Y=300 for row 2)
-assert('Volume at X=28',   ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_X, 28'));
-assert('Volume at Y=190',  ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_Y, 190'));
-assert('Pan at X=118',     ksp.includes('get_ui_id($Pan), $CONTROL_PAR_POS_X, 118'));
-assert('Attack at X=208',  ksp.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 208'));
-assert('Reverb at Y=300',  ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_Y, 300'));
+// Slider positions (startX=30, spacing=75, Y=200 for row 1, Y=310 for row 2)
+assert('Volume at X=30',   ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_X, 30'));
+assert('Volume at Y=200',  ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_Y, 200'));
+assert('Pan at X=105',     ksp.includes('get_ui_id($Pan), $CONTROL_PAR_POS_X, 105'));
+assert('Attack at X=180',  ksp.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 180'));
+assert('Reverb at Y=310',  ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_Y, 310'));
 
 // ── Test 17: GUI Skin — Verify layout with fewer knobs (V1.1b) ──
 console.log('\n=== Test 17: GUI Skin (Fewer Knobs V1.1b) ===');
@@ -269,12 +267,12 @@ context.templateConfig.controls.release.enabled = true;
 const ksp4 = vm.runInContext('generateKSP(samples, stats, templateConfig)', context);
 assert('4 sliders: 320px height for 1 row', ksp4.includes('set_ui_height_px(320)'));
 const posX4 = (ksp4.match(/\$CONTROL_PAR_POS_X/g) || []).length;
-assert('4 sliders: 8 POS_X (4 sliders + 4 labels)', posX4 === 8);
-assert('4 sliders: Attack at X=208', ksp4.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 208'));
+assert('4 sliders: 4 POS_X (no labels)', posX4 === 4);
+assert('4 sliders: Attack at X=180', ksp4.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 180'));
 assert('4 sliders: has wallpaper', ksp4.includes('$INST_WALLPAPER_ID'));
-assert('4 sliders: has knob skin', ksp4.includes('$CONTROL_PAR_PICTURE, "sa_knob"'));
+assert('4 sliders: has knob skin', ksp4.includes('$CONTROL_PAR_PICTURE, "knob"'));
 assert('4 sliders: has MOUSE_BEHAVIOUR', ksp4.includes('$CONTROL_PAR_MOUSE_BEHAVIOUR, -2000'));
-assert('4 sliders: has companion labels', ksp4.includes('declare ui_label $lbl_'));
+assert('4 sliders: no ui_label', !ksp4.includes('ui_label'));
 
 // Restore
 Object.keys(origEnabled).forEach(k => {
