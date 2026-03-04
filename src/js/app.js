@@ -6,8 +6,9 @@ var state = {
   completedPhases: [],
   samples: [],
   selectedSampleIndex: -1,
-  instrumentName: 'Instrument',
-  outputPath: null
+  instrumentName: 'My Instrument',
+  outputPath: null,
+  recordingPlan: null
 };
 
 // ── Phase Navigation ──
@@ -119,12 +120,26 @@ async function handleFileDrop(dirPath) {
 
     if (state.samples.length === 0) return;
 
-    // Auto-detect instrument name
-    var firstMatched = state.samples.find(function(s) { return s.parsed; });
-    if (firstMatched) {
-      state.instrumentName = firstMatched.instrument;
-      document.getElementById('projectName').textContent = state.instrumentName + ' Project';
+    // Auto-detect instrument name: recording plan > first parsed sample > folder name
+    if (state.recordingPlan && state.recordingPlan.instrument) {
+      state.instrumentName = state.recordingPlan.instrument;
+    } else {
+      var firstMatched = state.samples.find(function(s) { return s.parsed; });
+      if (firstMatched && firstMatched.instrument) {
+        state.instrumentName = firstMatched.instrument;
+      } else {
+        // Fall back to parent folder name
+        var parts = dirPath.replace(/\\/g, '/').replace(/\/$/, '').split('/');
+        state.instrumentName = parts[parts.length - 1] || 'My Instrument';
+      }
     }
+    document.getElementById('projectName').textContent = state.instrumentName + ' Project';
+
+    // Show and populate instrument name field
+    var nameBar = document.getElementById('instrumentNameBar');
+    nameBar.style.display = '';
+    var nameInput = document.getElementById('instrumentNameInput');
+    nameInput.value = state.instrumentName;
 
     // Assign key ranges and velocity ranges
     assignKeyRanges(state.samples);
@@ -235,90 +250,68 @@ function renderTrimConfirm(index) {
   });
 }
 
-// ── Trim All (batch with confirmation) ──
-async function trimAllSamples() {
-  var overlay = document.getElementById('trimAllOverlay');
-  var list = document.getElementById('trimAllList');
-  var btnApply = document.getElementById('trimAllApply');
-  var btnCancel = document.getElementById('trimAllCancel');
+// ── Accept All Trims (single click, no dialog) ──
+async function acceptAllTrims() {
+  var btn = document.getElementById('btnAcceptAllTrims');
+  btn.textContent = 'Analyzing\u2026';
+  btn.disabled = true;
 
-  // Show overlay with "Analyzing..." state
-  overlay.classList.add('visible');
-  list.innerHTML = '<div class="trim-all-analyzing">Analyzing samples\u2026</div>';
-  btnApply.style.display = 'none';
-
-  // Analyze all samples
-  var results = [];
+  var accepted = 0;
   for (var i = 0; i < state.samples.length; i++) {
     var s = state.samples[i];
-    try {
-      var trim = await analyzeSampleTrim(s.path);
-      if (trim) {
-        s.trimStart = trim.startTime;
-        s.trimEnd = trim.endTime;
-        s.trimStartSample = trim.startSample;
-        s.trimEndSample = trim.endSample;
-        s.silenceRemoved = trim.silenceRemoved;
-        s.trimSignificant = trim.significant;
-        s.trimApproved = false;
-        results.push({ index: i, sample: s, trim: trim });
+
+    // Skip already-approved samples
+    if (s.trimApproved) continue;
+
+    // Analyze if not yet analyzed
+    if (s.trimStart == null) {
+      try {
+        var trim = await analyzeSampleTrim(s.path);
+        if (trim) {
+          s.trimStart = trim.startTime;
+          s.trimEnd = trim.endTime;
+          s.trimStartSample = trim.startSample;
+          s.trimEndSample = trim.endSample;
+          s.silenceRemoved = trim.silenceRemoved;
+          s.trimSignificant = trim.significant;
+        }
+      } catch (err) {
+        console.error('Trim analysis failed for', s.filename, err);
+        continue;
       }
-    } catch (err) {
-      console.error('Trim analysis failed for', s.filename, err);
+    }
+
+    // Approve only if there's actually silence to trim
+    if (s.silenceRemoved != null && s.silenceRemoved > 0.01) {
+      s.trimApproved = true;
+      accepted++;
     }
   }
 
-  // Show results
-  var trimmable = results.filter(function(r) { return r.trim.silenceRemoved > 0.01; });
+  btn.textContent = 'Accept All Trims';
+  btn.disabled = false;
+  renderFileList();
+  console.log('Accept All Trims: ' + accepted + ' samples approved');
+}
 
-  if (trimmable.length === 0) {
-    list.innerHTML = '<div class="trim-all-analyzing">All samples are clean \u2014 no silence to trim.</div>';
-    btnApply.style.display = 'none';
-    return;
+function rejectAllTrims() {
+  var rejected = 0;
+  for (var i = 0; i < state.samples.length; i++) {
+    var s = state.samples[i];
+    if (s.trimApproved || s.trimStart != null) {
+      s.trimStart = undefined;
+      s.trimEnd = undefined;
+      s.trimStartSample = undefined;
+      s.trimEndSample = undefined;
+      s.silenceRemoved = undefined;
+      s.trimSignificant = undefined;
+      s.trimApproved = false;
+      rejected++;
+    }
   }
-
-  list.innerHTML = '';
-  trimmable.forEach(function(r) {
-    var row = document.createElement('div');
-    row.className = 'trim-all-row';
-    row.innerHTML =
-      '<span class="filename">' + r.sample.filename + '</span>' +
-      '<span class="trim-tag">\u2212' + r.trim.silenceRemoved.toFixed(1) + 's</span>';
-    list.appendChild(row);
-  });
-
-  var summary = document.createElement('div');
-  summary.className = 'trim-all-summary';
-  summary.textContent = trimmable.length + ' of ' + results.length + ' samples have trimmable silence';
-  list.appendChild(summary);
-
-  btnApply.style.display = '';
-  btnApply.textContent = 'Apply Trim to ' + trimmable.length + ' Samples';
-
-  // Wire up apply
-  btnApply.onclick = function() {
-    trimmable.forEach(function(r) {
-      r.sample.trimApproved = true;
-    });
-    overlay.classList.remove('visible');
-    renderFileList();
-  };
-
-  btnCancel.onclick = function() {
-    // Revert trim data for unapproved
-    results.forEach(function(r) {
-      if (!r.sample.trimApproved) {
-        r.sample.trimStart = undefined;
-        r.sample.trimEnd = undefined;
-        r.sample.trimStartSample = undefined;
-        r.sample.trimEndSample = undefined;
-        r.sample.silenceRemoved = undefined;
-        r.sample.trimSignificant = undefined;
-      }
-    });
-    overlay.classList.remove('visible');
-    renderFileList();
-  };
+  renderFileList();
+  renderSampleDetail();
+  console.log('Reject All Trims: ' + rejected + ' samples reset');
 }
 
 function renderFileList() {
@@ -574,9 +567,8 @@ function updateValidation() {
 // ── Phase 3 ──
 function renderPhase3() {
   var stats = getSampleStats(state.samples);
-  state.instrumentName = stats.instrument || state.instrumentName;
 
-  // Preview
+  // Preview — always use the user-editable name
   document.getElementById('previewTitle').textContent = state.instrumentName;
   var statsEl = document.getElementById('previewStats');
   statsEl.innerHTML =
@@ -587,6 +579,7 @@ function renderPhase3() {
   renderFxChain();
   renderControlToggles();
   renderEffectToggles();
+  renderFormatToggles();
 }
 
 function renderKnobGrid() {
@@ -719,6 +712,37 @@ function renderControlToggles() {
   });
 }
 
+function renderFormatToggles() {
+  var panel = document.getElementById('formatPanel');
+  panel.innerHTML = '';
+
+  Object.keys(templateConfig.exportFormats).forEach(function(key) {
+    var fmt = templateConfig.exportFormats[key];
+    var toggle = document.createElement('div');
+    toggle.className = 'effect-toggle';
+
+    var checkbox = document.createElement('div');
+    checkbox.className = 'toggle-checkbox' + (fmt.enabled ? ' checked' : '');
+
+    var info = document.createElement('div');
+    info.className = 'effect-info';
+    info.innerHTML = '<div class="effect-name">' + fmt.label + '</div>' +
+                     '<div class="effect-desc">' + fmt.description + '</div>';
+
+    toggle.appendChild(checkbox);
+    toggle.appendChild(info);
+
+    toggle.addEventListener('click', function() {
+      var toggled = toggleExportFormat(key);
+      if (toggled) {
+        checkbox.classList.toggle('checked');
+      }
+    });
+
+    panel.appendChild(toggle);
+  });
+}
+
 function renderEffectToggles() {
   var panel = document.getElementById('effectsPanel');
   panel.innerHTML = '';
@@ -752,15 +776,34 @@ function renderEffectToggles() {
 // ── Phase 4 ──
 function renderPhase4() {
   var stats = getSampleStats(state.samples);
+  var formats = getEnabledFormats();
 
   var grid = document.getElementById('summaryGrid');
   grid.innerHTML =
-    '<div class="summary-cell"><span class="label">INSTRUMENT</span><div class="value">' + stats.instrument + '</div></div>' +
+    '<div class="summary-cell"><span class="label">INSTRUMENT</span><div class="value">' + state.instrumentName + '</div></div>' +
     '<div class="summary-cell"><span class="label">SAMPLES</span><div class="value">' + stats.totalSamples + '</div></div>' +
     '<div class="summary-cell"><span class="label">ARTICULATIONS</span><div class="value">' + stats.articulationCount + '</div></div>' +
     '<div class="summary-cell"><span class="label">VEL LAYERS</span><div class="value">' + stats.maxVelocityLayers + '</div></div>' +
     '<div class="summary-cell"><span class="label">ROUND ROBINS</span><div class="value">' + stats.maxRoundRobins + '</div></div>' +
     '<div class="summary-cell"><span class="label">TEMPLATE</span><div class="value">Chromatic</div></div>';
+
+  // Render output formats
+  var outputEl = document.getElementById('outputFormats');
+  var html = '';
+  if (formats.indexOf('kontakt') !== -1) {
+    html += '<div class="output-row">' +
+      '<div class="output-info"><span class="output-format">Kontakt 6+</span>' +
+      '<span class="output-desc">KSP script + resource container</span></div>' +
+      '<span class="output-badge">.txt</span></div>';
+  }
+  if (formats.indexOf('decentsampler') !== -1) {
+    if (html) html += '<div style="border-top:1px solid var(--divider);margin:10px 0;"></div>';
+    html += '<div class="output-row">' +
+      '<div class="output-info"><span class="output-format">Decent Sampler</span>' +
+      '<span class="output-desc">Ready-to-play .dspreset \u2014 zero manual steps</span></div>' +
+      '<span class="output-badge">.dspreset</span></div>';
+  }
+  outputEl.innerHTML = html;
 }
 
 async function doBuild() {
@@ -773,6 +816,8 @@ async function doBuild() {
     if (!result) return;
 
     var stats = getSampleStats(state.samples);
+    // Override instrument name with user-editable field
+    stats.instrument = state.instrumentName;
 
     // Show progress
     var btn = document.getElementById('btnBuild');
@@ -808,15 +853,52 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  // Settings modal
+  document.getElementById('btnSettings').addEventListener('click', openSettingsModal);
+  document.getElementById('settingsClose').addEventListener('click', closeSettingsModal);
+  document.getElementById('settingsCancelBtn').addEventListener('click', closeSettingsModal);
+  document.getElementById('settingsSaveBtn').addEventListener('click', saveSettings);
+  document.getElementById('settingsToggleKey').addEventListener('click', toggleApiKeyVisibility);
+  document.getElementById('settingsTestKey').addEventListener('click', testApiKey);
+
+  // Phase 1 chat
+  document.getElementById('btnChatSend').addEventListener('click', function() {
+    var input = document.getElementById('chatInput');
+    var msg = input.value.trim();
+    if (msg) {
+      input.value = '';
+      sendChatMessage(msg);
+    }
+  });
+  document.getElementById('chatInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      document.getElementById('btnChatSend').click();
+    }
+  });
+
+  // Phase 1 — decide layout based on API key
+  updatePhase1Layout();
+  renderChatMessages();
+
   // Phase 1
   initPhase1();
 
   // Phase 2
   initPhase2();
 
-  // Phase 2 Trim All button
-  document.getElementById('btnTrimAll').addEventListener('click', function() {
-    if (state.samples.length > 0) trimAllSamples();
+  // Phase 2 instrument name input
+  document.getElementById('instrumentNameInput').addEventListener('input', function() {
+    state.instrumentName = this.value || 'My Instrument';
+    document.getElementById('projectName').textContent = state.instrumentName + ' Project';
+  });
+
+  // Phase 2 Accept All / Reject All Trims
+  document.getElementById('btnAcceptAllTrims').addEventListener('click', function() {
+    if (state.samples.length > 0) acceptAllTrims();
+  });
+  document.getElementById('btnRejectAllTrims').addEventListener('click', function() {
+    if (state.samples.length > 0) rejectAllTrims();
   });
 
   // Phase 2 → Phase 3 button
@@ -851,6 +933,11 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Clipboard copy failed:', err);
         btn.textContent = 'Copy failed';
       });
+    } else {
+      btn.textContent = 'No KSP generated';
+      setTimeout(function() {
+        btn.textContent = 'Copy Script to Clipboard';
+      }, 2000);
     }
   });
 

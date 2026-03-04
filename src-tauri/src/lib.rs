@@ -1,4 +1,50 @@
 #[tauri::command]
+async fn chat_with_claude(
+    api_key: String,
+    messages: String,
+    system_prompt: String,
+) -> Result<String, String> {
+    let messages_val: serde_json::Value = serde_json::from_str(&messages)
+        .map_err(|e| format!("Invalid messages JSON: {}", e))?;
+
+    let body = serde_json::json!({
+        "model": "claude-sonnet-4-5-20250929",
+        "max_tokens": 2048,
+        "system": system_prompt,
+        "messages": messages_val
+    });
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", &api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    let status = response.status();
+    let resp_body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Parse failed: {}", e))?;
+
+    if !status.is_success() {
+        let err_msg = resp_body["error"]["message"]
+            .as_str()
+            .unwrap_or("Unknown API error");
+        return Err(format!("API error ({}): {}", status.as_u16(), err_msg));
+    }
+
+    resp_body["content"][0]["text"]
+        .as_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "No text in response".to_string())
+}
+
+#[tauri::command]
 fn read_dir_recursive(path: String) -> Result<Vec<String>, String> {
     let mut files = Vec::new();
     collect_wav_files(&std::path::Path::new(&path), &mut files)
@@ -71,6 +117,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
+            chat_with_claude,
             read_dir_recursive,
             copy_file,
             write_text_file,

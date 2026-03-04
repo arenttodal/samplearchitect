@@ -28,7 +28,8 @@ const modules = [
   'src/js/mapper.js',
   'src/js/template.js',
   'src/js/trimmer.js',
-  'src/js/ksp-gen.js'
+  'src/js/ksp-gen.js',
+  'src/js/dspreset-gen.js'
 ];
 
 modules.forEach(function(mod) {
@@ -371,8 +372,156 @@ assert('data size correct',     wavResult.dataSize === wavResult.expectedDataSiz
 assert('silent sample = 0',     wavResult.silentSample === 0);
 assert('signal sample nonzero', wavResult.signalSample !== 0);
 
-// ── Test 19: Verify no plugins key in tauri.conf.json ──
-console.log('\n=== Test 19: Tauri Config ===');
+// ── Test 19: Decent Sampler .dspreset Generation ──
+console.log('\n=== Test 19: Decent Sampler .dspreset Generation ===');
+
+const dsTestCode = `
+(function() {
+  var ds = generateDspreset(samples, stats, templateConfig, 'Test');
+  return ds;
+})()
+`;
+
+const dsXml = vm.runInContext(dsTestCode, context);
+fs.writeFileSync(path.join(outputDir, 'Test.dspreset'), dsXml);
+console.log('\n.dspreset written to test-output/Test.dspreset');
+
+// Verify XML structure
+assert('has XML declaration', dsXml.startsWith('<?xml version="1.0" encoding="UTF-8"?>'));
+assert('has DecentSampler root', dsXml.includes('<DecentSampler minVersion="1.0.0">'));
+assert('has closing DecentSampler', dsXml.includes('</DecentSampler>'));
+assert('has ui section', dsXml.includes('<ui width="812" height="375"'));
+assert('has bgColor AARRGGBB', dsXml.includes('bgColor="FF0A0A0B"'));
+assert('has instrument title', dsXml.includes('text="Test"'));
+assert('has SAMPLEARCHITECT label', dsXml.includes('text="SAMPLEARCHITECT"'));
+assert('has tab', dsXml.includes('<tab name="main">'));
+
+// Knobs — all 8 enabled by default
+assert('has VOLUME knob', dsXml.includes('label="VOLUME"'));
+assert('has PAN knob', dsXml.includes('label="PAN"'));
+assert('has ATTACK knob', dsXml.includes('label="ATTACK"'));
+assert('has RELEASE knob', dsXml.includes('label="RELEASE"'));
+assert('has TUNE knob', dsXml.includes('label="TUNE"'));
+assert('has CUTOFF knob', dsXml.includes('label="CUTOFF"'));
+assert('has RES knob', dsXml.includes('label="RES"'));
+assert('has REVERB knob', dsXml.includes('label="REVERB"'));
+
+// Knob bindings
+assert('has AMP_VOLUME binding', dsXml.includes('parameter="AMP_VOLUME"'));
+assert('has ENV_ATTACK binding', dsXml.includes('parameter="ENV_ATTACK"'));
+assert('has FX_FILTER_FREQUENCY binding', dsXml.includes('parameter="FX_FILTER_FREQUENCY"'));
+assert('has FX_REVERB_WET_LEVEL binding', dsXml.includes('parameter="FX_REVERB_WET_LEVEL"'));
+
+// Groups
+assert('has groups section', dsXml.includes('<groups>'));
+assert('has Plucked group', dsXml.includes('name="Plucked"'));
+
+// Sample entries
+assert('has sample path', dsXml.includes('path="Samples/Plucked/Test_Plucked_C3_v1_rr1.wav"'));
+assert('has rootNote 60', dsXml.includes('rootNote="60"'));
+assert('has rootNote 64', dsXml.includes('rootNote="64"'));
+assert('has rootNote 67', dsXml.includes('rootNote="67"'));
+assert('has loVel/hiVel', dsXml.includes('loVel="0" hiVel="127"'));
+
+// Effects
+assert('has effects section', dsXml.includes('<effects>'));
+assert('has lowpass effect', dsXml.includes('type="lowpass"'));
+assert('has reverb effect', dsXml.includes('type="reverb"'));
+assert('has delay effect', dsXml.includes('type="delay"'));
+
+// ── Test 20: DS with fewer controls ──
+console.log('\n=== Test 20: DS with Fewer Controls ===');
+const dsFewerCode = `
+(function() {
+  // Disable some controls
+  var origEnabled = {};
+  Object.keys(templateConfig.controls).forEach(function(k) {
+    origEnabled[k] = templateConfig.controls[k].enabled;
+  });
+  templateConfig.controls.tune.enabled = false;
+  templateConfig.controls.cutoff.enabled = false;
+  templateConfig.controls.resonance.enabled = false;
+  templateConfig.controls.reverb.enabled = false;
+
+  var ds = generateDspreset(samples, stats, templateConfig, 'Test');
+
+  // Restore
+  Object.keys(origEnabled).forEach(function(k) {
+    templateConfig.controls[k].enabled = origEnabled[k];
+  });
+  return ds;
+})()
+`;
+const dsXml4 = vm.runInContext(dsFewerCode, context);
+assert('4 knobs: has VOLUME', dsXml4.includes('label="VOLUME"'));
+assert('4 knobs: has PAN', dsXml4.includes('label="PAN"'));
+assert('4 knobs: no TUNE', !dsXml4.includes('label="TUNE"'));
+assert('4 knobs: no CUTOFF', !dsXml4.includes('label="CUTOFF"'));
+assert('4 knobs: no RES', !dsXml4.includes('label="RES"'));
+assert('4 knobs: no REVERB knob', !dsXml4.includes('label="REVERB"'));
+
+// ── Test 21: DS Round Robin Groups ──
+console.log('\n=== Test 21: DS Round Robin Groups ===');
+const dsRRCode = `
+(function() {
+  // Create samples with round robins
+  var rrSamples = [
+    parseFilename('Test_Plucked_C3_v1_rr1.wav', '/test/Test_Plucked_C3_v1_rr1.wav'),
+    parseFilename('Test_Plucked_C3_v1_rr2.wav', '/test/Test_Plucked_C3_v1_rr2.wav'),
+    parseFilename('Test_Plucked_E3_v1_rr1.wav', '/test/Test_Plucked_E3_v1_rr1.wav'),
+    parseFilename('Test_Plucked_E3_v1_rr2.wav', '/test/Test_Plucked_E3_v1_rr2.wav')
+  ];
+  assignKeyRanges(rrSamples);
+  assignVelocityRanges(rrSamples);
+  var rrStats = getSampleStats(rrSamples);
+  return generateDspreset(rrSamples, rrStats, templateConfig, 'TestRR');
+})()
+`;
+const dsRR = vm.runInContext(dsRRCode, context);
+assert('RR: has seqMode', dsRR.includes('seqMode="round_robin"'));
+assert('RR: has seqPosition 1', dsRR.includes('seqPosition="1"'));
+assert('RR: has seqPosition 2', dsRR.includes('seqPosition="2"'));
+assert('RR: has _RR1 group name', dsRR.includes('name="Plucked_RR1"'));
+assert('RR: has _RR2 group name', dsRR.includes('name="Plucked_RR2"'));
+
+// ── Test 22: Export Format Helpers ──
+console.log('\n=== Test 22: Export Format Helpers ===');
+const fmtCode = `
+(function() {
+  var results = {};
+  // Default: both enabled
+  results.defaultFormats = getEnabledFormats();
+
+  // Disable DS
+  templateConfig.exportFormats.decentsampler.enabled = false;
+  results.kontaktOnly = getEnabledFormats();
+
+  // Try to disable kontakt too — should fail (can't disable both)
+  results.toggleResult = toggleExportFormat('kontakt');
+  results.afterFailedToggle = getEnabledFormats();
+
+  // Re-enable DS, disable kontakt
+  templateConfig.exportFormats.decentsampler.enabled = true;
+  templateConfig.exportFormats.kontakt.enabled = false;
+  results.dsOnly = getEnabledFormats();
+
+  // Restore
+  templateConfig.exportFormats.kontakt.enabled = true;
+  templateConfig.exportFormats.decentsampler.enabled = true;
+  return results;
+})()
+`;
+const fmtResults = vm.runInContext(fmtCode, context);
+assert('default: both formats', fmtResults.defaultFormats.length === 2);
+assert('default: has kontakt', fmtResults.defaultFormats.indexOf('kontakt') !== -1);
+assert('default: has decentsampler', fmtResults.defaultFormats.indexOf('decentsampler') !== -1);
+assert('kontakt only', fmtResults.kontaktOnly.length === 1 && fmtResults.kontaktOnly[0] === 'kontakt');
+assert('cant disable last format', fmtResults.toggleResult === false);
+assert('still has kontakt after failed toggle', fmtResults.afterFailedToggle.indexOf('kontakt') !== -1);
+assert('ds only', fmtResults.dsOnly.length === 1 && fmtResults.dsOnly[0] === 'decentsampler');
+
+// ── Test 23: Verify no plugins key in tauri.conf.json ──
+console.log('\n=== Test 23: Tauri Config ===');
 const tauriConf = JSON.parse(fs.readFileSync(path.join(__dirname, 'src-tauri/tauri.conf.json'), 'utf-8'));
 assert('no plugins key', !('plugins' in tauriConf));
 
