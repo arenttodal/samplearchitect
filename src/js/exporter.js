@@ -111,6 +111,7 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
   });
 
   var knobStyle = config.knobStyle || 'gray';
+  console.log('Copying knob asset: knob_' + knobStyle + '.png');
   var knobBytes = getKnobPngBytes(knobStyle);
   await window.__TAURI__.core.invoke('write_file_bytes', {
     path: basePath + '/Resources/pictures/knob.png',
