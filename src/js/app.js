@@ -198,8 +198,18 @@ function renderFileList() {
 
 function selectSample(index) {
   state.selectedSampleIndex = index;
+  // Re-render file list to update selection highlight
   renderFileList();
-  renderSampleDetail();
+  // Render detail panel — wrapped in try/catch to never corrupt file list
+  try {
+    renderSampleDetail();
+  } catch (err) {
+    console.error('Error rendering sample detail:', err);
+    var container = document.getElementById('sampleDetail');
+    if (container) {
+      container.innerHTML = '<div class="detail-empty">Error loading sample details</div>';
+    }
+  }
 }
 
 function renderSampleDetail() {
