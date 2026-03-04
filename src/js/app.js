@@ -130,7 +130,7 @@ async function handleFileDrop(dirPath) {
     assignKeyRanges(state.samples);
     assignVelocityRanges(state.samples);
 
-    // Render immediately (trim analysis runs in background)
+    // Render immediately (no auto-trim — user triggers trim manually)
     renderFileList();
     renderKeyboardView();
     updateValidation();
@@ -139,17 +139,121 @@ async function handleFileDrop(dirPath) {
     document.getElementById('dropZone').classList.add('hidden');
     document.getElementById('keyboardContainer').style.display = '';
 
-    // Auto-trim analysis (runs async, updates UI as each sample completes)
-    analyzeTrimAll(state.samples);
-
   } catch (err) {
     console.error('File drop handling failed:', err);
   }
 }
 
-async function analyzeTrimAll(samples) {
-  for (var i = 0; i < samples.length; i++) {
-    var s = samples[i];
+// ── Per-sample trim (manual) ──
+async function trimSingleSample(index) {
+  var s = state.samples[index];
+  if (!s) return;
+
+  try {
+    var trim = await analyzeSampleTrim(s.path);
+    if (!trim) return;
+
+    s.trimStart = trim.startTime;
+    s.trimEnd = trim.endTime;
+    s.trimStartSample = trim.startSample;
+    s.trimEndSample = trim.endSample;
+    s.silenceRemoved = trim.silenceRemoved;
+    s.trimSignificant = trim.significant;
+    s.trimApproved = false; // analyzed but not yet approved
+
+    // Select this sample and show trim confirmation in detail panel
+    state.selectedSampleIndex = index;
+    renderFileList();
+    renderTrimConfirm(index);
+  } catch (err) {
+    console.error('Trim analysis failed for', s.filename, err);
+  }
+}
+
+function approveTrim(index) {
+  var s = state.samples[index];
+  if (!s) return;
+  s.trimApproved = true;
+  renderFileList();
+  renderSampleDetail();
+}
+
+function rejectTrim(index) {
+  var s = state.samples[index];
+  if (!s) return;
+  s.trimStart = undefined;
+  s.trimEnd = undefined;
+  s.trimStartSample = undefined;
+  s.trimEndSample = undefined;
+  s.silenceRemoved = undefined;
+  s.trimSignificant = undefined;
+  s.trimApproved = false;
+  renderFileList();
+  renderSampleDetail();
+}
+
+function renderTrimConfirm(index) {
+  var container = document.getElementById('sampleDetail');
+  var s = state.samples[index];
+  if (!s || s.silenceRemoved == null) return;
+
+  var removed = s.silenceRemoved.toFixed(2);
+  var origDur = (s.trimEnd != null && s.trimStart != null) ?
+    ((s.trimEndSample + (s.trimEnd - s.trimStart > 0 ? 0 : 0)) / 1) : 0;
+
+  container.innerHTML =
+    '<div class="inner-panel">' +
+    '<span class="label-lg" style="display:block;margin-bottom:12px;">TRIM PREVIEW</span>' +
+    '<div class="trim-preview-info">' +
+    '<div class="detail-grid">' +
+    '<div class="detail-item"><span class="label">SILENCE REMOVED</span><div class="value">' + removed + 's</div></div>' +
+    '<div class="detail-item"><span class="label">TRIM START</span><div class="value">' + s.trimStart.toFixed(3) + 's</div></div>' +
+    '<div class="detail-item"><span class="label">TRIM END</span><div class="value">' + s.trimEnd.toFixed(3) + 's</div></div>' +
+    '<div class="detail-item"><span class="label">STATUS</span><div class="value">' + (s.silenceRemoved > 0.01 ? 'Trimmable' : 'Clean') + '</div></div>' +
+    '</div>' +
+    '</div>' +
+    '<div class="detail-actions" style="gap:8px;">' +
+    '<button class="btn-secondary" id="btnPreviewOriginal">Original</button>' +
+    '<button class="btn-secondary" id="btnPreviewTrimmed">Trimmed</button>' +
+    (s.silenceRemoved > 0.01 ?
+      '<button class="btn-primary" id="btnApproveTrim">Accept Trim</button>' +
+      '<button class="btn-secondary" id="btnRejectTrim">Reject</button>' :
+      '<button class="btn-secondary" id="btnRejectTrim">Close</button>') +
+    '</div>' +
+    '</div>';
+
+  document.getElementById('btnPreviewOriginal').addEventListener('click', function() {
+    previewSample(s.path);
+  });
+  document.getElementById('btnPreviewTrimmed').addEventListener('click', function() {
+    previewSample(s.path, s.trimStart, s.trimEnd);
+  });
+  if (document.getElementById('btnApproveTrim')) {
+    document.getElementById('btnApproveTrim').addEventListener('click', function() {
+      approveTrim(index);
+    });
+  }
+  document.getElementById('btnRejectTrim').addEventListener('click', function() {
+    rejectTrim(index);
+  });
+}
+
+// ── Trim All (batch with confirmation) ──
+async function trimAllSamples() {
+  var overlay = document.getElementById('trimAllOverlay');
+  var list = document.getElementById('trimAllList');
+  var btnApply = document.getElementById('trimAllApply');
+  var btnCancel = document.getElementById('trimAllCancel');
+
+  // Show overlay with "Analyzing..." state
+  overlay.classList.add('visible');
+  list.innerHTML = '<div class="trim-all-analyzing">Analyzing samples\u2026</div>';
+  btnApply.style.display = 'none';
+
+  // Analyze all samples
+  var results = [];
+  for (var i = 0; i < state.samples.length; i++) {
+    var s = state.samples[i];
     try {
       var trim = await analyzeSampleTrim(s.path);
       if (trim) {
@@ -159,13 +263,65 @@ async function analyzeTrimAll(samples) {
         s.trimEndSample = trim.endSample;
         s.silenceRemoved = trim.silenceRemoved;
         s.trimSignificant = trim.significant;
+        s.trimApproved = false;
+        results.push({ index: i, sample: s, trim: trim });
       }
     } catch (err) {
       console.error('Trim analysis failed for', s.filename, err);
     }
   }
-  // Re-render file list to show trim indicators
-  renderFileList();
+
+  // Show results
+  var trimmable = results.filter(function(r) { return r.trim.silenceRemoved > 0.01; });
+
+  if (trimmable.length === 0) {
+    list.innerHTML = '<div class="trim-all-analyzing">All samples are clean \u2014 no silence to trim.</div>';
+    btnApply.style.display = 'none';
+    return;
+  }
+
+  list.innerHTML = '';
+  trimmable.forEach(function(r) {
+    var row = document.createElement('div');
+    row.className = 'trim-all-row';
+    row.innerHTML =
+      '<span class="filename">' + r.sample.filename + '</span>' +
+      '<span class="trim-tag">\u2212' + r.trim.silenceRemoved.toFixed(1) + 's</span>';
+    list.appendChild(row);
+  });
+
+  var summary = document.createElement('div');
+  summary.className = 'trim-all-summary';
+  summary.textContent = trimmable.length + ' of ' + results.length + ' samples have trimmable silence';
+  list.appendChild(summary);
+
+  btnApply.style.display = '';
+  btnApply.textContent = 'Apply Trim to ' + trimmable.length + ' Samples';
+
+  // Wire up apply
+  btnApply.onclick = function() {
+    trimmable.forEach(function(r) {
+      r.sample.trimApproved = true;
+    });
+    overlay.classList.remove('visible');
+    renderFileList();
+  };
+
+  btnCancel.onclick = function() {
+    // Revert trim data for unapproved
+    results.forEach(function(r) {
+      if (!r.sample.trimApproved) {
+        r.sample.trimStart = undefined;
+        r.sample.trimEnd = undefined;
+        r.sample.trimStartSample = undefined;
+        r.sample.trimEndSample = undefined;
+        r.sample.silenceRemoved = undefined;
+        r.sample.trimSignificant = undefined;
+      }
+    });
+    overlay.classList.remove('visible');
+    renderFileList();
+  };
 }
 
 function renderFileList() {
@@ -197,10 +353,10 @@ function renderFileList() {
     row.className = 'file-row';
     if (index === state.selectedSampleIndex) row.classList.add('selected');
 
-    // Dot color: amber if significant silence was trimmed, else green/warn
+    // Dot color: green if parsed (and trim approved or no trim needed), amber otherwise
     var dot = document.createElement('div');
     if (sample.parsed) {
-      dot.className = 'dot ' + (sample.trimSignificant ? 'warn' : 'ok');
+      dot.className = 'dot ok';
     } else {
       dot.className = 'dot warn';
     }
@@ -209,19 +365,29 @@ function renderFileList() {
     fname.className = 'filename';
     fname.textContent = sample.filename;
 
-    // Trim indicator
-    if (sample.silenceRemoved != null && sample.silenceRemoved > 0.01) {
+    row.appendChild(dot);
+    row.appendChild(fname);
+
+    // Show trim status tag if trim was analyzed
+    if (sample.trimApproved && sample.silenceRemoved > 0.01) {
       var trimTag = document.createElement('span');
-      trimTag.className = 'trim-tag';
-      trimTag.textContent = '-' + sample.silenceRemoved.toFixed(1) + 's';
-      fname.appendChild(document.createTextNode(' '));
-      row.appendChild(dot);
-      row.appendChild(fname);
+      trimTag.className = 'trim-tag approved';
+      trimTag.textContent = '\u2212' + sample.silenceRemoved.toFixed(1) + 's';
       row.appendChild(trimTag);
-    } else {
-      row.appendChild(dot);
-      row.appendChild(fname);
     }
+
+    // Per-sample Trim button
+    var trimBtn = document.createElement('button');
+    trimBtn.className = 'btn-trim';
+    trimBtn.textContent = sample.trimApproved ? '\u2713' : 'Trim';
+    if (sample.trimApproved) trimBtn.classList.add('approved');
+    trimBtn.addEventListener('click', (function(idx) {
+      return function(e) {
+        e.stopPropagation();
+        trimSingleSample(idx);
+      };
+    })(index));
+    row.appendChild(trimBtn);
 
     var pitch = document.createElement('span');
     pitch.className = 'pitch-label';
@@ -265,8 +431,10 @@ function renderSampleDetail() {
   if (sample.parsed) {
     var keyRange = (sample.lowKey != null && sample.highKey != null) ? (sample.lowKey + '\u2013' + sample.highKey) : '\u2014';
     var trimInfo = '\u2014';
-    if (sample.silenceRemoved != null && sample.silenceRemoved > 0.01) {
-      trimInfo = '-' + sample.silenceRemoved.toFixed(2) + 's';
+    if (sample.trimApproved && sample.silenceRemoved > 0.01) {
+      trimInfo = '\u2212' + sample.silenceRemoved.toFixed(2) + 's (approved)';
+    } else if (sample.silenceRemoved != null && sample.silenceRemoved > 0.01) {
+      trimInfo = '\u2212' + sample.silenceRemoved.toFixed(2) + 's (pending)';
     } else if (sample.silenceRemoved != null) {
       trimInfo = 'Clean';
     }
@@ -279,7 +447,7 @@ function renderSampleDetail() {
       '<div class="detail-item"><span class="label">ARTICULATION</span><div class="value">' + (sample.articulation || '\u2014') + '</div></div>' +
       '<div class="detail-item"><span class="label">ROUND ROBIN</span><div class="value">' + (sample.roundRobin || '\u2014') + '</div></div>' +
       '<div class="detail-item"><span class="label">KEY RANGE</span><div class="value">' + keyRange + '</div></div>' +
-      '<div class="detail-item"><span class="label">TRIMMED</span><div class="value">' + trimInfo + '</div></div>' +
+      '<div class="detail-item"><span class="label">TRIM</span><div class="value">' + trimInfo + '</div></div>' +
       '</div>' +
       '<div class="detail-actions">' +
       '<button class="btn-secondary" id="btnPreview">Preview</button>' +
@@ -287,7 +455,12 @@ function renderSampleDetail() {
       '</div>';
 
     document.getElementById('btnPreview').addEventListener('click', function() {
-      previewSample(sample.path, sample.trimStart, sample.trimEnd);
+      // Only use trim points for preview if trim was approved
+      if (sample.trimApproved) {
+        previewSample(sample.path, sample.trimStart, sample.trimEnd);
+      } else {
+        previewSample(sample.path);
+      }
     });
   } else {
     // Unmatched: show assignment form
@@ -323,7 +496,11 @@ function renderSampleDetail() {
     });
 
     document.getElementById('btnPreviewUnmatched').addEventListener('click', function() {
-      previewSample(sample.path, sample.trimStart, sample.trimEnd);
+      if (sample.trimApproved) {
+        previewSample(sample.path, sample.trimStart, sample.trimEnd);
+      } else {
+        previewSample(sample.path);
+      }
     });
   }
 }
@@ -639,6 +816,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Phase 2
   initPhase2();
+
+  // Phase 2 Trim All button
+  document.getElementById('btnTrimAll').addEventListener('click', function() {
+    if (state.samples.length > 0) trimAllSamples();
+  });
 
   // Phase 2 → Phase 3 button
   document.getElementById('btnToPhase3').addEventListener('click', function() {
