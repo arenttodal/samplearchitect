@@ -53,15 +53,61 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     var stageIdx = Math.min(3, 1 + Math.floor((i / mapped.length) * 3));
     onProgress(stageIdx, stages[stageIdx]);
 
-    // Only apply trim if user explicitly approved it
-    if (s.trimApproved && s.trimStartSample != null && s.trimEndSample != null && s.silenceRemoved > 0.01) {
+    if (s.trimApproved && s.trimStartSample != null && s.silenceRemoved > 0.01) {
+      // Trim approved: read, parse, trim, validate, write
       var rawBytes = await window.__TAURI__.core.invoke('read_file_bytes', { path: s.path });
+      var rawUint8 = new Uint8Array(rawBytes);
+      var header = parseWavHeader(rawUint8);
+      var dataChunkOffset = header ? header.dataOffset : 'PARSE_FAILED';
+      var trimStartByte = header ? (header.dataOffset + s.trimStartSample * header.blockAlign) : '?';
+
+      console.log(
+        'Exporting ' + s.filename + ': trimApproved=true' +
+        ', dataChunkOffset=' + dataChunkOffset +
+        ', trimStartSample=' + s.trimStartSample +
+        ', trimStartByte=' + trimStartByte +
+        ', originalFileSize=' + rawUint8.length
+      );
+
       var trimmedBytes = trimWavBytes(rawBytes, s.trimStartSample, s.trimEndSample);
+
+      // Validation: compare first 100 audio samples of export vs what preview plays
+      if (header) {
+        var trimmedHeader = parseWavHeader(trimmedBytes);
+        if (trimmedHeader) {
+          var exportView = new DataView(trimmedBytes.buffer || trimmedBytes);
+          var origView = new DataView(rawUint8.buffer);
+          var origSampleStart = header.dataOffset + (s.trimStartSample * header.blockAlign);
+          var match = true;
+          var samplesToCheck = Math.min(100, Math.floor(trimmedHeader.dataSize / trimmedHeader.blockAlign));
+          for (var v = 0; v < samplesToCheck; v++) {
+            var exportOffset = trimmedHeader.dataOffset + (v * trimmedHeader.blockAlign);
+            var origOffset = origSampleStart + (v * header.blockAlign);
+            if (exportOffset + 1 < trimmedBytes.length && origOffset + 1 < rawUint8.length) {
+              var exportVal = exportView.getInt16(exportOffset, true);
+              var origVal = origView.getInt16(origOffset, true);
+              if (exportVal !== origVal) {
+                match = false;
+                console.error('MISMATCH at sample ' + v + ': export=' + exportVal + ' original=' + origVal);
+                break;
+              }
+            }
+          }
+          console.log('  Validation (' + samplesToCheck + ' samples): ' + (match ? 'PASS' : 'FAIL'));
+        }
+      }
+
+      console.log('  exportedFileSize=' + trimmedBytes.length);
+
       await window.__TAURI__.core.invoke('write_file_bytes', {
         path: destPath,
         bytes: Array.from(trimmedBytes)
       });
     } else {
+      // Not approved: raw byte-for-byte copy, zero processing
+      console.log(
+        'Exporting ' + s.filename + ': trimApproved=false, raw copy'
+      );
       await window.__TAURI__.core.invoke('copy_file', {
         src: s.path,
         dest: destPath
