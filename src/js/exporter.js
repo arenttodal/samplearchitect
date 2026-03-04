@@ -1,4 +1,5 @@
 /* exporter.js — Folder structure + file writer */
+/* V1.1b: Resource container with wallpaper + knob skin */
 
 /* Stores the last generated KSP script for clipboard copy */
 var lastGeneratedKSP = '';
@@ -16,16 +17,19 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     'Organizing samples',
     'Copying sample files',
     'Copying sample files',
+    'Generating resources',
     'Generating KSP script',
     'Writing script file',
     'Creating setup guide',
     'Finalizing'
   ];
 
-  // Stage 1: Create folders
+  // Stage 1: Create folders (V1.1b structure)
   onProgress(0, stages[0]);
   await window.__TAURI__.core.invoke('create_directory', { path: basePath + '/Samples' });
-  await window.__TAURI__.core.invoke('create_directory', { path: basePath + '/Scripts' });
+  await window.__TAURI__.core.invoke('create_directory', { path: basePath + '/Resources' });
+  await window.__TAURI__.core.invoke('create_directory', { path: basePath + '/Resources/pictures' });
+  await window.__TAURI__.core.invoke('create_directory', { path: basePath + '/Resources/scripts' });
 
   // Create articulation subfolders
   var articulations = {};
@@ -65,27 +69,43 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     }
   }
 
-  // Stage 5-6: Generate and write KSP script as .txt
+  // Stage 5: Generate resource container assets (wallpaper + knob skin)
   onProgress(4, stages[4]);
+
+  var wallpaperBytes = await generateWallpaper(instrumentName, mapped.length);
+  await window.__TAURI__.core.invoke('write_file_bytes', {
+    path: basePath + '/Resources/pictures/wallpaper.png',
+    bytes: Array.from(wallpaperBytes)
+  });
+
+  var knobBytes = await generateKnobStrip();
+  await window.__TAURI__.core.invoke('write_file_bytes', {
+    path: basePath + '/Resources/pictures/sa_knob.png',
+    bytes: Array.from(knobBytes)
+  });
+
+  // Stage 6-7: Generate and write KSP script as .txt
+  onProgress(5, stages[5]);
   var kspScript = generateKSP(mapped, stats, config);
   lastGeneratedKSP = kspScript;
 
-  onProgress(5, stages[5]);
+  onProgress(6, stages[6]);
+  // Write to Resources/scripts/ (primary location for resource container)
   await window.__TAURI__.core.invoke('write_text_file', {
-    path: basePath + '/Scripts/' + instrumentName + '_script.txt',
+    path: basePath + '/Resources/scripts/' + instrumentName + '_script.txt',
     contents: kspScript
   });
 
-  // Stage 7: Setup guide
-  onProgress(6, stages[6]);
+  // Stage 8: Setup guide
+  onProgress(7, stages[7]);
   var guide = generateSetupGuide(mapped, stats, config, basePath, instrumentName);
   await window.__TAURI__.core.invoke('write_text_file', {
     path: basePath + '/Setup Guide.txt',
     contents: guide
   });
 
-  // Stage 8: Finalize
-  onProgress(7, stages[7]);
+  // Stage 9: Finalize
+  onProgress(8, stages[8]);
 
   return basePath;
 }
@@ -138,31 +158,56 @@ function generateSetupGuide(samples, stats, config, outputPath, instrumentName) 
     '     the note in the filename (e.g. Kantele_Plucked_C3_v1_rr1 → C3)',
     '   - Adjust any incorrect mappings manually if needed',
     '',
-    '6. Open the Script Editor:',
+    '6. Link the Resource Container:',
+    '   - In the Instrument Header, click the wrench icon for Instrument Options',
+    '   - Go to the "Instrument Options" dialog',
+    '   - Set the "Resource Container" path to the Resources/ folder in this export:',
+    '     ' + (outputPath ? outputPath + '/Resources' : 'Resources/'),
+    '   - This loads the custom wallpaper and knob skin automatically',
+    '',
+    '7. Open the Script Editor:',
     '   - Click the "Script" tab (scroll icon) in the instrument header',
     '   - Click on an empty script slot (e.g., "Script 1")',
     '   - Click "Edit" to open the code editor',
     '',
-    '7. Paste the KSP script:',
+    '8. Paste the KSP script:',
     '   - Use the "Copy Script to Clipboard" button in SampleArchitect',
-    '   - Or open: Scripts/' + instrumentName + '_script.txt',
+    '   - Or open: Resources/scripts/' + instrumentName + '_script.txt',
     '   - Select ALL the text (Ctrl+A / Cmd+A) and copy it',
     '   - Paste into the Kontakt Script Editor (Ctrl+V / Cmd+V)',
     '   - Click "Apply"',
     '',
-    '8. The script adds:',
+    '9. The script adds:',
+    '   - Custom wallpaper background (rendered from Resources/pictures/wallpaper.png)',
+    '   - Custom knob skins (rendered from Resources/pictures/sa_knob.png)',
     '   - UI control knobs (' + (enabledCtrls.length > 0 ? enabledCtrls.join(', ') : 'None configured') + ')',
     '   - The script does NOT remap zones — Kontakt handles that from filenames',
     '',
-    '9. Save your instrument:',
-    '   - File > Save As...',
-    '   - Choose a location and name',
-    '   - The instrument is now saved as a .nki file',
+    '10. Save your instrument:',
+    '    - File > Save As...',
+    '    - Choose a location and name',
+    '    - The instrument is now saved as a .nki file',
     '',
-    '10. Play!',
+    '11. Play!',
     '    - Set up a MIDI track in your DAW pointing to this Kontakt instance',
     '    - Play notes on your MIDI controller or piano roll',
     '    - Your sampled instrument should respond to velocity and pitch',
+    '',
+    '',
+    'RESOURCE CONTAINER',
+    '==================',
+    '',
+    'This export includes a Resources/ folder with custom graphics:',
+    '',
+    '  Resources/',
+    '  ├── pictures/',
+    '  │   ├── wallpaper.png    (633×330 instrument background)',
+    '  │   └── sa_knob.png      (128-frame knob strip)',
+    '  └── scripts/',
+    '      └── ' + instrumentName + '_script.txt',
+    '',
+    'The KSP script references these files by name. If Kontakt shows missing',
+    'graphics, re-link the Resource Container path in Instrument Options.',
     '',
     '',
     'INSTRUMENT DETAILS',
@@ -202,9 +247,14 @@ function generateSetupGuide(samples, stats, config, outputPath, instrumentName) 
     '> The script requires Kontakt 6 or newer. Kontakt 5 is not supported.',
     '> Check for stray characters at the beginning or end of the pasted text.',
     '',
+    '"Missing wallpaper or knob graphics"',
+    '> Re-link the Resource Container in Instrument Options (step 6 above)',
+    '> Make sure the Resources/ folder is next to the Samples/ folder',
+    '> The pictures/ subfolder must contain wallpaper.png and sa_knob.png',
+    '',
     '',
     '================================================================================',
-    '  Generated by SampleArchitect v1.1 | evenant.com',
+    '  Generated by SampleArchitect v1.1b | evenant.com',
     '================================================================================'
   ]);
 

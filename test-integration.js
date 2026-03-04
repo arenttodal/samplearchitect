@@ -181,8 +181,8 @@ assert('no * 10000', !ksp.includes('* 10000'));
 assert('no * 1000',  !ksp.includes('* 1000'));
 assert('no * 10',    !ksp.includes('* 10'));
 
-// ── Test 15: GUI Skin — Performance View Setup ──
-console.log('\n=== Test 15: GUI Skin (Performance View) ===');
+// ── Test 15: GUI Skin — Performance View Setup (V1.1b) ──
+console.log('\n=== Test 15: GUI Skin (Performance View V1.1b) ===');
 
 // make_perfview must be the very first command after on init
 const initIdx = lines.findIndex(l => l.trim() === 'on init');
@@ -190,39 +190,46 @@ const firstCmdAfterInit = lines.slice(initIdx + 1).find(l => l.trim() !== '' && 
 assert('make_perfview is first command', firstCmdAfterInit && firstCmdAfterInit.trim() === 'make_perfview');
 
 assert('has set_ui_height_px',  ksp.includes('set_ui_height_px('));
-assert('has set_ui_color decimal', ksp.includes('set_ui_color(-16119285)'));
+assert('set_ui_color is commented out', ksp.includes('{ set_ui_color(' + (-16119285) + ') }'));
+assert('no active set_ui_color', !ksp.match(/^\s+set_ui_color\(/m));
 assert('no hex literals in KSP',   !ksp.match(/[0-9a-f]+h\b/i));
 assert('has message("")',       ksp.includes('message("")'));
 assert('no set_skin_offset',    !ksp.includes('set_skin_offset'));
 
-// ── Test 16: GUI Skin — Title Label + Knob Positioning ──
-console.log('\n=== Test 16: Title Label + Knob Positioning ===');
-assert('has ui_label $title',            ksp.includes('declare ui_label $title'));
-assert('has set_text title',             ksp.includes('set_text($title, "Test")'));
-assert('has CONTROL_PAR_TEXT_ALIGNMENT', ksp.includes('$CONTROL_PAR_TEXT_ALIGNMENT'));
-assert('has CONTROL_PAR_FONT_TYPE',      ksp.includes('$CONTROL_PAR_FONT_TYPE'));
-assert('has CONTROL_PAR_POS_X',          ksp.includes('$CONTROL_PAR_POS_X'));
-assert('has CONTROL_PAR_POS_Y',          ksp.includes('$CONTROL_PAR_POS_Y'));
+// ── Test 16: V1.1b — Wallpaper + Knob Skin References ──
+console.log('\n=== Test 16: Wallpaper + Knob Skin (V1.1b) ===');
+assert('has wallpaper reference',   ksp.includes('set_control_par_str($INST_WALLPAPER_ID, $CONTROL_PAR_PICTURE, "wallpaper")'));
+assert('has knob skin reference',   ksp.includes('set_control_par_str(get_ui_id($Volume), $CONTROL_PAR_PICTURE, "sa_knob")'));
+assert('no ui_label $title',        !ksp.includes('declare ui_label $title'));
+assert('no set_text($title',        !ksp.includes('set_text($title'));
+assert('no CONTROL_PAR_TEXT_ALIGNMENT', !ksp.includes('$CONTROL_PAR_TEXT_ALIGNMENT'));
+assert('no CONTROL_PAR_FONT_TYPE',      !ksp.includes('$CONTROL_PAR_FONT_TYPE'));
+assert('has $CONTROL_PAR_POS_X',         ksp.includes('$CONTROL_PAR_POS_X'));
+assert('has $CONTROL_PAR_POS_Y',         ksp.includes('$CONTROL_PAR_POS_Y'));
 assert('has get_ui_id',                  ksp.includes('get_ui_id($'));
 
-// Verify all 8 knobs have position set (X and Y for each) — title label also has X/Y so +1
+// All 8 knobs have set_control_par_str for picture
+const knobPicMatches = (ksp.match(/set_control_par_str\(get_ui_id\(\$\w+\), \$CONTROL_PAR_PICTURE, "sa_knob"\)/g) || []).length;
+assert('8 knob skin assignments', knobPicMatches === 8);
+
+// 8 knobs have POS_X and POS_Y (no title label anymore)
 const posXMatches = (ksp.match(/\$CONTROL_PAR_POS_X/g) || []).length;
 const posYMatches = (ksp.match(/\$CONTROL_PAR_POS_Y/g) || []).length;
-assert('9 POS_X (8 knobs + title)', posXMatches === 9);
-assert('9 POS_Y (8 knobs + title)', posYMatches === 9);
+assert('8 POS_X (8 knobs, no title)', posXMatches === 8);
+assert('8 POS_Y (8 knobs, no title)', posYMatches === 8);
 
-// Verify 2-row layout for 8 knobs (more than 6 = 2 rows)
-assert('330px height for 8 knobs', ksp.includes('set_ui_height_px(330)'));
+// V1.1b: Always 330px height
+assert('330px height always', ksp.includes('set_ui_height_px(330)'));
 
-// Verify specific knob positions (Y=40 for row 1, Y=120 for row 2)
-assert('Volume at X=20',  ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_X, 20'));
-assert('Volume at Y=40',  ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_Y, 40'));
-assert('Pan at X=120',    ksp.includes('get_ui_id($Pan), $CONTROL_PAR_POS_X, 120'));
-assert('Reverb at X=120', ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_X, 120'));
-assert('Reverb at Y=120', ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_Y, 120'));
+// V1.1b: Knob positions (Y=60 for row 1, Y=160 for row 2, spacing=75)
+assert('Volume at X=20',   ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_X, 20'));
+assert('Volume at Y=60',   ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_Y, 60'));
+assert('Pan at X=95',      ksp.includes('get_ui_id($Pan), $CONTROL_PAR_POS_X, 95'));
+assert('Attack at X=170',  ksp.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 170'));
+assert('Reverb at Y=160',  ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_Y, 160'));
 
-// ── Test 17: GUI Skin — Verify layout with fewer knobs ──
-console.log('\n=== Test 17: GUI Skin (Fewer Knobs) ===');
+// ── Test 17: GUI Skin — Verify layout with fewer knobs (V1.1b) ──
+console.log('\n=== Test 17: GUI Skin (Fewer Knobs V1.1b) ===');
 // Temporarily disable some controls to test single row
 const origEnabled = {};
 Object.keys(context.templateConfig.controls).forEach(k => {
@@ -239,10 +246,12 @@ context.templateConfig.controls.attack.enabled = true;
 context.templateConfig.controls.release.enabled = true;
 
 const ksp4 = vm.runInContext('generateKSP(samples, stats, templateConfig)', context);
-assert('4 knobs: 250px height', ksp4.includes('set_ui_height_px(250)'));
+assert('4 knobs: still 330px height', ksp4.includes('set_ui_height_px(330)'));
 const posX4 = (ksp4.match(/\$CONTROL_PAR_POS_X/g) || []).length;
-assert('4 knobs: 5 POS_X (4 knobs + title)', posX4 === 5);
-assert('4 knobs: Attack at X=220', ksp4.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 220'));
+assert('4 knobs: 4 POS_X (no title)', posX4 === 4);
+assert('4 knobs: Attack at X=170', ksp4.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 170'));
+assert('4 knobs: has wallpaper', ksp4.includes('$INST_WALLPAPER_ID'));
+assert('4 knobs: has knob skin', ksp4.includes('$CONTROL_PAR_PICTURE, "sa_knob"'));
 
 // Restore
 Object.keys(origEnabled).forEach(k => {
