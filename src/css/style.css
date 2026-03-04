@@ -551,6 +551,45 @@ code, .code-block {
   flex-shrink: 0;
 }
 
+/* Instrument name bar */
+.instrument-name-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--card-edge);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.instrument-name-bar .label {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.instrument-name-input {
+  flex: 1;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  color: var(--h1);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  outline: none;
+}
+
+.instrument-name-input:focus {
+  border-color: rgba(255,255,255,0.12);
+}
+
+.instrument-name-input::placeholder {
+  color: var(--faint);
+  font-weight: 400;
+}
+
 /* Right panel */
 .right-panel {
   flex: 1;
@@ -1223,72 +1262,6 @@ code, .code-block {
   padding: 3px 10px;
 }
 
-/* ── Trim All Overlay ── */
-.trim-all-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.7);
-  z-index: 100;
-  align-items: center;
-  justify-content: center;
-}
-.trim-all-overlay.visible {
-  display: flex;
-}
-.trim-all-dialog {
-  width: 440px;
-  max-height: 70vh;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-}
-.trim-all-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--divider);
-}
-.trim-all-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 16px;
-}
-.trim-all-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--divider);
-}
-.trim-all-row .filename {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--body);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  margin-right: 8px;
-}
-.trim-all-summary {
-  padding: 10px 0 4px;
-  font-size: 11px;
-  color: var(--muted);
-}
-.trim-all-analyzing {
-  padding: 20px 0;
-  text-align: center;
-  color: var(--muted);
-  font-size: 12px;
-}
-.trim-all-footer {
-  padding: 10px 16px 14px;
-  border-top: 1px solid var(--divider);
-  display: flex;
-  justify-content: flex-end;
-}
 
 /* ── Trim Preview Info ── */
 .trim-preview-info {

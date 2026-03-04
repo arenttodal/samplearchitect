@@ -96,28 +96,21 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
             <div class="file-list-badges" id="fileBadges"></div>
           </div>
           <div class="file-list-toolbar" id="fileListToolbar">
-            <button class="btn-secondary btn-sm" id="btnTrimAll">Trim All</button>
+            <button class="btn-secondary btn-sm" id="btnAcceptAllTrims">Accept All Trims</button>
+            <button class="btn-secondary btn-sm" id="btnRejectAllTrims">Reject All Trims</button>
           </div>
           <div class="validation-warning hidden" id="validationWarning"></div>
           <div class="file-list-scroll" id="fileListScroll"></div>
         </div>
 
-        <!-- Trim All confirmation overlay -->
-        <div class="trim-all-overlay" id="trimAllOverlay">
-          <div class="card trim-all-dialog">
-            <div class="trim-all-header">
-              <span class="label-lg">BATCH TRIM</span>
-              <button class="btn-secondary btn-sm" id="trimAllCancel">Cancel</button>
-            </div>
-            <div class="trim-all-list" id="trimAllList"></div>
-            <div class="trim-all-footer">
-              <button class="btn-primary" id="trimAllApply" style="display:none;">Apply</button>
-            </div>
-          </div>
-        </div>
-
         <!-- Right panel -->
         <div class="right-panel">
+          <!-- Instrument name field -->
+          <div class="instrument-name-bar" id="instrumentNameBar" style="display:none;">
+            <label class="label" for="instrumentNameInput">INSTRUMENT NAME</label>
+            <input type="text" id="instrumentNameInput" class="instrument-name-input" placeholder="My Instrument" spellcheck="false">
+          </div>
+
           <!-- Drop zone -->
           <div class="drop-zone" id="dropZone">
             <div class="drop-zone-icon">&#8615;</div>

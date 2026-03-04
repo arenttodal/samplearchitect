@@ -6,7 +6,7 @@ var state = {
   completedPhases: [],
   samples: [],
   selectedSampleIndex: -1,
-  instrumentName: 'Instrument',
+  instrumentName: 'My Instrument',
   outputPath: null
 };
 
@@ -119,12 +119,22 @@ async function handleFileDrop(dirPath) {
 
     if (state.samples.length === 0) return;
 
-    // Auto-detect instrument name
+    // Auto-detect instrument name from first parsed sample or parent folder
     var firstMatched = state.samples.find(function(s) { return s.parsed; });
-    if (firstMatched) {
+    if (firstMatched && firstMatched.instrument) {
       state.instrumentName = firstMatched.instrument;
-      document.getElementById('projectName').textContent = state.instrumentName + ' Project';
+    } else {
+      // Fall back to parent folder name
+      var parts = dirPath.replace(/\\/g, '/').replace(/\/$/, '').split('/');
+      state.instrumentName = parts[parts.length - 1] || 'My Instrument';
     }
+    document.getElementById('projectName').textContent = state.instrumentName + ' Project';
+
+    // Show and populate instrument name field
+    var nameBar = document.getElementById('instrumentNameBar');
+    nameBar.style.display = '';
+    var nameInput = document.getElementById('instrumentNameInput');
+    nameInput.value = state.instrumentName;
 
     // Assign key ranges and velocity ranges
     assignKeyRanges(state.samples);
@@ -235,90 +245,68 @@ function renderTrimConfirm(index) {
   });
 }
 
-// ── Trim All (batch with confirmation) ──
-async function trimAllSamples() {
-  var overlay = document.getElementById('trimAllOverlay');
-  var list = document.getElementById('trimAllList');
-  var btnApply = document.getElementById('trimAllApply');
-  var btnCancel = document.getElementById('trimAllCancel');
+// ── Accept All Trims (single click, no dialog) ──
+async function acceptAllTrims() {
+  var btn = document.getElementById('btnAcceptAllTrims');
+  btn.textContent = 'Analyzing\u2026';
+  btn.disabled = true;
 
-  // Show overlay with "Analyzing..." state
-  overlay.classList.add('visible');
-  list.innerHTML = '<div class="trim-all-analyzing">Analyzing samples\u2026</div>';
-  btnApply.style.display = 'none';
-
-  // Analyze all samples
-  var results = [];
+  var accepted = 0;
   for (var i = 0; i < state.samples.length; i++) {
     var s = state.samples[i];
-    try {
-      var trim = await analyzeSampleTrim(s.path);
-      if (trim) {
-        s.trimStart = trim.startTime;
-        s.trimEnd = trim.endTime;
-        s.trimStartSample = trim.startSample;
-        s.trimEndSample = trim.endSample;
-        s.silenceRemoved = trim.silenceRemoved;
-        s.trimSignificant = trim.significant;
-        s.trimApproved = false;
-        results.push({ index: i, sample: s, trim: trim });
+
+    // Skip already-approved samples
+    if (s.trimApproved) continue;
+
+    // Analyze if not yet analyzed
+    if (s.trimStart == null) {
+      try {
+        var trim = await analyzeSampleTrim(s.path);
+        if (trim) {
+          s.trimStart = trim.startTime;
+          s.trimEnd = trim.endTime;
+          s.trimStartSample = trim.startSample;
+          s.trimEndSample = trim.endSample;
+          s.silenceRemoved = trim.silenceRemoved;
+          s.trimSignificant = trim.significant;
+        }
+      } catch (err) {
+        console.error('Trim analysis failed for', s.filename, err);
+        continue;
       }
-    } catch (err) {
-      console.error('Trim analysis failed for', s.filename, err);
+    }
+
+    // Approve only if there's actually silence to trim
+    if (s.silenceRemoved != null && s.silenceRemoved > 0.01) {
+      s.trimApproved = true;
+      accepted++;
     }
   }
 
-  // Show results
-  var trimmable = results.filter(function(r) { return r.trim.silenceRemoved > 0.01; });
+  btn.textContent = 'Accept All Trims';
+  btn.disabled = false;
+  renderFileList();
+  console.log('Accept All Trims: ' + accepted + ' samples approved');
+}
 
-  if (trimmable.length === 0) {
-    list.innerHTML = '<div class="trim-all-analyzing">All samples are clean \u2014 no silence to trim.</div>';
-    btnApply.style.display = 'none';
-    return;
+function rejectAllTrims() {
+  var rejected = 0;
+  for (var i = 0; i < state.samples.length; i++) {
+    var s = state.samples[i];
+    if (s.trimApproved || s.trimStart != null) {
+      s.trimStart = undefined;
+      s.trimEnd = undefined;
+      s.trimStartSample = undefined;
+      s.trimEndSample = undefined;
+      s.silenceRemoved = undefined;
+      s.trimSignificant = undefined;
+      s.trimApproved = false;
+      rejected++;
+    }
   }
-
-  list.innerHTML = '';
-  trimmable.forEach(function(r) {
-    var row = document.createElement('div');
-    row.className = 'trim-all-row';
-    row.innerHTML =
-      '<span class="filename">' + r.sample.filename + '</span>' +
-      '<span class="trim-tag">\u2212' + r.trim.silenceRemoved.toFixed(1) + 's</span>';
-    list.appendChild(row);
-  });
-
-  var summary = document.createElement('div');
-  summary.className = 'trim-all-summary';
-  summary.textContent = trimmable.length + ' of ' + results.length + ' samples have trimmable silence';
-  list.appendChild(summary);
-
-  btnApply.style.display = '';
-  btnApply.textContent = 'Apply Trim to ' + trimmable.length + ' Samples';
-
-  // Wire up apply
-  btnApply.onclick = function() {
-    trimmable.forEach(function(r) {
-      r.sample.trimApproved = true;
-    });
-    overlay.classList.remove('visible');
-    renderFileList();
-  };
-
-  btnCancel.onclick = function() {
-    // Revert trim data for unapproved
-    results.forEach(function(r) {
-      if (!r.sample.trimApproved) {
-        r.sample.trimStart = undefined;
-        r.sample.trimEnd = undefined;
-        r.sample.trimStartSample = undefined;
-        r.sample.trimEndSample = undefined;
-        r.sample.silenceRemoved = undefined;
-        r.sample.trimSignificant = undefined;
-      }
-    });
-    overlay.classList.remove('visible');
-    renderFileList();
-  };
+  renderFileList();
+  renderSampleDetail();
+  console.log('Reject All Trims: ' + rejected + ' samples reset');
 }
 
 function renderFileList() {
@@ -574,9 +562,8 @@ function updateValidation() {
 // ── Phase 3 ──
 function renderPhase3() {
   var stats = getSampleStats(state.samples);
-  state.instrumentName = stats.instrument || state.instrumentName;
 
-  // Preview
+  // Preview — always use the user-editable name
   document.getElementById('previewTitle').textContent = state.instrumentName;
   var statsEl = document.getElementById('previewStats');
   statsEl.innerHTML =
@@ -755,7 +742,7 @@ function renderPhase4() {
 
   var grid = document.getElementById('summaryGrid');
   grid.innerHTML =
-    '<div class="summary-cell"><span class="label">INSTRUMENT</span><div class="value">' + stats.instrument + '</div></div>' +
+    '<div class="summary-cell"><span class="label">INSTRUMENT</span><div class="value">' + state.instrumentName + '</div></div>' +
     '<div class="summary-cell"><span class="label">SAMPLES</span><div class="value">' + stats.totalSamples + '</div></div>' +
     '<div class="summary-cell"><span class="label">ARTICULATIONS</span><div class="value">' + stats.articulationCount + '</div></div>' +
     '<div class="summary-cell"><span class="label">VEL LAYERS</span><div class="value">' + stats.maxVelocityLayers + '</div></div>' +
@@ -773,6 +760,8 @@ async function doBuild() {
     if (!result) return;
 
     var stats = getSampleStats(state.samples);
+    // Override instrument name with user-editable field
+    stats.instrument = state.instrumentName;
 
     // Show progress
     var btn = document.getElementById('btnBuild');
@@ -814,9 +803,18 @@ document.addEventListener('DOMContentLoaded', function() {
   // Phase 2
   initPhase2();
 
-  // Phase 2 Trim All button
-  document.getElementById('btnTrimAll').addEventListener('click', function() {
-    if (state.samples.length > 0) trimAllSamples();
+  // Phase 2 instrument name input
+  document.getElementById('instrumentNameInput').addEventListener('input', function() {
+    state.instrumentName = this.value || 'My Instrument';
+    document.getElementById('projectName').textContent = state.instrumentName + ' Project';
+  });
+
+  // Phase 2 Accept All / Reject All Trims
+  document.getElementById('btnAcceptAllTrims').addEventListener('click', function() {
+    if (state.samples.length > 0) acceptAllTrims();
+  });
+  document.getElementById('btnRejectAllTrims').addEventListener('click', function() {
+    if (state.samples.length > 0) rejectAllTrims();
   });
 
   // Phase 2 → Phase 3 button
