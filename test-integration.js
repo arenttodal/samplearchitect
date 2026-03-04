@@ -100,16 +100,41 @@ console.log('Articulations:', stats.articulationList.join(', '));
 console.log('Max vel layers:', stats.maxVelocityLayers);
 console.log('Max RR:', stats.maxRoundRobins);
 
-// ── Test 6: KSP Generation ──
+// ── Test 6: KSP Generation (NEW — no zone mapping) ──
 console.log('\\n=== Test 6: KSP Generation ===');
 var ksp = generateKSP(samples, stats, templateConfig);
 console.log('KSP script length:', ksp.length, 'chars');
 console.log('Contains on init:', ksp.indexOf('on init') > -1);
 console.log('Contains end on:', ksp.indexOf('end on') > -1);
-console.log('Contains zone mapping:', ksp.indexOf('ZONE_PAR_ROOT_KEY') > -1);
-console.log('Contains C3 root key (60):', ksp.indexOf('ZONE_PAR_ROOT_KEY, 60') > -1);
-console.log('Contains E3 root key (64):', ksp.indexOf('ZONE_PAR_ROOT_KEY, 64') > -1);
-console.log('Contains G3 root key (67):', ksp.indexOf('ZONE_PAR_ROOT_KEY, 67') > -1);
+console.log('Contains set_script_title:', ksp.indexOf('set_script_title') > -1);
+console.log('Contains Volume knob:', ksp.indexOf('declare ui_knob \\$Volume') > -1);
+console.log('Contains ui_control handler:', ksp.indexOf('on ui_control') > -1);
+
+// Verify NO zone mapping code exists
+console.log('\\nVerifying NO zone mapping code:');
+console.log('No get_zone_id:', ksp.indexOf('get_zone_id') === -1);
+console.log('No zone_get_sample_name:', ksp.indexOf('zone_get_sample_name') === -1);
+console.log('No set_zone_par:', ksp.indexOf('set_zone_par') === -1);
+console.log('No ZONE_PAR_ROOT_KEY:', ksp.indexOf('ZONE_PAR_ROOT_KEY') === -1);
+console.log('No \\$num_zones:', ksp.indexOf('\\$num_zones') === -1);
+
+// Verify NO effects chain code
+console.log('No EFFECT_TYPE_FILTER:', ksp.indexOf('EFFECT_TYPE_FILTER') === -1);
+console.log('No EFFECT_TYPE_REVERB:', ksp.indexOf('EFFECT_TYPE_REVERB') === -1);
+console.log('No EFFECT_TYPE_DELAY:', ksp.indexOf('EFFECT_TYPE_DELAY') === -1);
+
+// Verify correct knob ranges (0-100 style)
+console.log('\\nVerifying knob ranges:');
+console.log('Volume 0-100:', ksp.indexOf('\\$Volume (0, 100, 1)') > -1);
+console.log('Attack 0-100:', ksp.indexOf('\\$Attack (0, 100, 1)') > -1);
+console.log('Release 0-100:', ksp.indexOf('\\$Release (0, 100, 1)') > -1);
+console.log('Tune -36 to 36:', ksp.indexOf('\\$Tune (-36, 36, 1)') > -1);
+
+// Verify correct engine_par scaling
+console.log('\\nVerifying engine par scaling:');
+console.log('Volume * 6300:', ksp.indexOf('\\$Volume * 6300') > -1);
+console.log('Attack * 10000:', ksp.indexOf('\\$Attack * 10000') > -1);
+console.log('Tune * 1000:', ksp.indexOf('\\$Tune * 1000') > -1);
 
 // Return KSP for file writing
 var result = { ksp: ksp, stats: stats };
@@ -121,8 +146,8 @@ const result = vm.runInContext(testCode, context);
 // Write KSP to test-output
 const outputDir = path.join(__dirname, 'test-output');
 if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-fs.writeFileSync(path.join(outputDir, 'Test.ksp'), result.ksp);
-console.log('\nKSP written to test-output/Test.ksp');
+fs.writeFileSync(path.join(outputDir, 'Test_script.txt'), result.ksp);
+console.log('\nKSP written to test-output/Test_script.txt');
 
 // ── Test 7: Verify KSP structure ──
 console.log('\n=== Test 7: KSP Structure Verification ===');
@@ -131,19 +156,37 @@ const lines = ksp.split('\n');
 const hasOnInit = lines.some(l => l.trim() === 'on init');
 const hasEndOn = lines.some(l => l.trim() === 'end on');
 const hasSetScriptTitle = ksp.includes('set_script_title');
-const hasWhileLoop = ksp.includes('while ($i < $num_zones)');
 const hasVolumeKnob = ksp.includes('declare ui_knob $Volume');
-const hasZoneMapping = ksp.includes('ZONE_PAR_ROOT_KEY, 60') && ksp.includes('ZONE_PAR_ROOT_KEY, 64') && ksp.includes('ZONE_PAR_ROOT_KEY, 67');
+const hasUiControl = ksp.includes('on ui_control');
+
+// MUST NOT have zone mapping
+const noGetZoneId = !ksp.includes('get_zone_id');
+const noSetZonePar = !ksp.includes('set_zone_par');
+const noZoneParRootKey = !ksp.includes('ZONE_PAR_ROOT_KEY');
+const noEffectsChain = !ksp.includes('EFFECT_TYPE_FILTER') && !ksp.includes('EFFECT_TYPE_REVERB');
+
+// MUST have correct knob ranges
+const hasVolumeRange = ksp.includes('$Volume (0, 100, 1)');
+const hasVolumeScaling = ksp.includes('$Volume * 6300');
 
 console.log('Has on init:', hasOnInit);
 console.log('Has end on:', hasEndOn);
 console.log('Has set_script_title:', hasSetScriptTitle);
-console.log('Has zone mapping loop:', hasWhileLoop);
 console.log('Has Volume knob:', hasVolumeKnob);
-console.log('Has all 3 zone mappings:', hasZoneMapping);
+console.log('Has ui_control handlers:', hasUiControl);
+console.log('No get_zone_id:', noGetZoneId);
+console.log('No set_zone_par:', noSetZonePar);
+console.log('No ZONE_PAR_ROOT_KEY:', noZoneParRootKey);
+console.log('No effects chain:', noEffectsChain);
+console.log('Has Volume 0-100 range:', hasVolumeRange);
+console.log('Has Volume * 6300 scaling:', hasVolumeScaling);
 
-if (!hasOnInit || !hasEndOn || !hasSetScriptTitle || !hasWhileLoop || !hasZoneMapping) {
-  console.error('FAIL: KSP structure invalid');
+const allPass = hasOnInit && hasEndOn && hasSetScriptTitle && hasVolumeKnob &&
+  hasUiControl && noGetZoneId && noSetZonePar && noZoneParRootKey &&
+  noEffectsChain && hasVolumeRange && hasVolumeScaling;
+
+if (!allPass) {
+  console.error('\nFAIL: KSP structure verification failed');
   process.exit(1);
 }
 
