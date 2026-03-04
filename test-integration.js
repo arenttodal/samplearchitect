@@ -16,6 +16,7 @@ const context = vm.createContext({
   Uint8Array: Uint8Array,
   DataView: DataView,
   String: String,
+  atob: function(s) { return Buffer.from(s, 'base64').toString('binary'); },
   document: null,
   window: {},
   navigator: {}
@@ -199,13 +200,11 @@ assert('no hex literals in KSP',   !ksp.match(/[0-9a-f]+h\b/i));
 assert('has message("")',       ksp.includes('message("")'));
 assert('no set_skin_offset',    !ksp.includes('set_skin_offset'));
 
-// ── Test 16: V1.1b — Wallpaper + Slider Knob Skin References ──
-console.log('\n=== Test 16: Wallpaper + Slider Knob Skin (V1.1b) ===');
+// ── Test 16: V1.1b — Wallpaper + Slider Knob Skin + Labels ──
+console.log('\n=== Test 16: Wallpaper + Slider Knob Skin + Labels (V1.1b) ===');
 assert('has wallpaper reference',   ksp.includes('set_control_par_str($INST_WALLPAPER_ID, $CONTROL_PAR_PICTURE, "wallpaper")'));
 assert('has knob skin reference',   ksp.includes('set_control_par_str(get_ui_id($Volume), $CONTROL_PAR_PICTURE, "knob")'));
 assert('no ui_label $title',        !ksp.includes('declare ui_label $title'));
-assert('no set_text($title',        !ksp.includes('set_text($title'));
-assert('no CONTROL_PAR_FONT_TYPE',      !ksp.includes('$CONTROL_PAR_FONT_TYPE'));
 assert('has $CONTROL_PAR_POS_X',         ksp.includes('$CONTROL_PAR_POS_X'));
 assert('has $CONTROL_PAR_POS_Y',         ksp.includes('$CONTROL_PAR_POS_Y'));
 assert('has get_ui_id',                  ksp.includes('get_ui_id($'));
@@ -215,8 +214,8 @@ const knobPicMatches = (ksp.match(/set_control_par_str\(get_ui_id\(\$\w+\), \$CO
 assert('8 knob skin assignments', knobPicMatches === 8);
 
 // ui_slider requires CONTROL_PAR_WIDTH/HEIGHT set to 54
-assert('has CONTROL_PAR_WIDTH', ksp.includes('$CONTROL_PAR_WIDTH, 54'));
-assert('has CONTROL_PAR_HEIGHT', ksp.includes('$CONTROL_PAR_HEIGHT, 54'));
+assert('has CONTROL_PAR_WIDTH 54', ksp.includes('$CONTROL_PAR_WIDTH, 54'));
+assert('has CONTROL_PAR_HEIGHT 54', ksp.includes('$CONTROL_PAR_HEIGHT, 54'));
 
 // Each slider has MOUSE_BEHAVIOUR -2000
 const mouseBehavMatches = (ksp.match(/\$CONTROL_PAR_MOUSE_BEHAVIOUR, -2000/g) || []).length;
@@ -226,26 +225,40 @@ assert('8 MOUSE_BEHAVIOUR', mouseBehavMatches === 8);
 const defaultValMatches = (ksp.match(/\$CONTROL_PAR_DEFAULT_VALUE/g) || []).length;
 assert('8 DEFAULT_VALUE', defaultValMatches === 8);
 
-// No companion labels — labels baked into wallpaper
-assert('no ui_label in KSP', !ksp.includes('ui_label'));
-assert('no hide_part in KSP', !ksp.includes('hide_part'));
-assert('no TEXT_ALIGNMENT in KSP', !ksp.includes('$CONTROL_PAR_TEXT_ALIGNMENT'));
+// 8 companion labels with short var names, FONT_TYPE 3, hide_part
+const labelMatches = (ksp.match(/declare ui_label \$l\w+/g) || []).length;
+assert('8 companion labels', labelMatches === 8);
+assert('has label $lVol', ksp.includes('declare ui_label $lVol'));
+assert('has label $lPan', ksp.includes('declare ui_label $lPan'));
+assert('has FONT_TYPE 3', ksp.includes('$CONTROL_PAR_FONT_TYPE, 3'));
+assert('has TEXT_ALIGNMENT 1', ksp.includes('$CONTROL_PAR_TEXT_ALIGNMENT, 1'));
+const hidePartMatches = (ksp.match(/hide_part\(\$l\w+, \$HIDE_PART_BG\)/g) || []).length;
+assert('8 hide_part for labels', hidePartMatches === 8);
 
-// 8 sliders only (no labels) = 8 POS_X and 8 POS_Y
+// Label height is 14
+assert('label HEIGHT 14', ksp.includes('$CONTROL_PAR_HEIGHT, 14'));
+
+// 8 sliders + 8 labels = 16 POS_X and 16 POS_Y
 const posXMatches = (ksp.match(/\$CONTROL_PAR_POS_X/g) || []).length;
 const posYMatches = (ksp.match(/\$CONTROL_PAR_POS_Y/g) || []).length;
-assert('8 POS_X (8 sliders, no labels)', posXMatches === 8);
-assert('8 POS_Y (8 sliders, no labels)', posYMatches === 8);
+assert('16 POS_X (8 sliders + 8 labels)', posXMatches === 16);
+assert('16 POS_Y (8 sliders + 8 labels)', posYMatches === 16);
 
-// 430px height for 2 rows (8 sliders), 320px for 1 row
+// 430px height for 2 rows (8 controls, 4 per row)
 assert('430px height for 2 rows', ksp.includes('set_ui_height_px(430)'));
 
-// Slider positions (startX=30, spacing=75, Y=200 for row 1, Y=310 for row 2)
+// Slider positions (startX=30, spacing=100, maxPerRow=4, Y=200/310)
 assert('Volume at X=30',   ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_X, 30'));
 assert('Volume at Y=200',  ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_Y, 200'));
-assert('Pan at X=105',     ksp.includes('get_ui_id($Pan), $CONTROL_PAR_POS_X, 105'));
-assert('Attack at X=180',  ksp.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 180'));
+assert('Pan at X=130',     ksp.includes('get_ui_id($Pan), $CONTROL_PAR_POS_X, 130'));
+assert('Attack at X=230',  ksp.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 230'));
+assert('Release at X=330', ksp.includes('get_ui_id($Release), $CONTROL_PAR_POS_X, 330'));
+assert('Tune at Y=310',    ksp.includes('get_ui_id($Tune), $CONTROL_PAR_POS_Y, 310'));
 assert('Reverb at Y=310',  ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_Y, 310'));
+
+// Label positions: labelX = knobX - 13, labelY = knobY + 58
+assert('Volume label X=17', ksp.includes('get_ui_id($lVol), $CONTROL_PAR_POS_X, 17'));
+assert('Volume label Y=258', ksp.includes('get_ui_id($lVol), $CONTROL_PAR_POS_Y, 258'));
 
 // ── Test 17: GUI Skin — Verify layout with fewer knobs (V1.1b) ──
 console.log('\n=== Test 17: GUI Skin (Fewer Knobs V1.1b) ===');
@@ -267,12 +280,13 @@ context.templateConfig.controls.release.enabled = true;
 const ksp4 = vm.runInContext('generateKSP(samples, stats, templateConfig)', context);
 assert('4 sliders: 320px height for 1 row', ksp4.includes('set_ui_height_px(320)'));
 const posX4 = (ksp4.match(/\$CONTROL_PAR_POS_X/g) || []).length;
-assert('4 sliders: 4 POS_X (no labels)', posX4 === 4);
-assert('4 sliders: Attack at X=180', ksp4.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 180'));
+assert('4 sliders: 8 POS_X (4 sliders + 4 labels)', posX4 === 8);
+assert('4 sliders: Attack at X=230', ksp4.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 230'));
 assert('4 sliders: has wallpaper', ksp4.includes('$INST_WALLPAPER_ID'));
 assert('4 sliders: has knob skin', ksp4.includes('$CONTROL_PAR_PICTURE, "knob"'));
 assert('4 sliders: has MOUSE_BEHAVIOUR', ksp4.includes('$CONTROL_PAR_MOUSE_BEHAVIOUR, -2000'));
-assert('4 sliders: no ui_label', !ksp4.includes('ui_label'));
+assert('4 sliders: has companion labels', ksp4.includes('declare ui_label $lVol'));
+assert('4 sliders: labels have FONT_TYPE 3', ksp4.includes('$CONTROL_PAR_FONT_TYPE, 3'));
 
 // Restore
 Object.keys(origEnabled).forEach(k => {
