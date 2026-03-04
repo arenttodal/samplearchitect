@@ -18,13 +18,18 @@ async function generateKnobStrip() {
   var width = frameSize;
   var height = frameSize * totalFrames; // 6912
 
-  var canvas;
-  if (typeof OffscreenCanvas !== 'undefined') {
-    canvas = new OffscreenCanvas(width, height);
-  } else {
-    canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+  // Always use DOM canvas — OffscreenCanvas may silently clamp dimensions
+  var canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  console.log('[SampleArchitect] Knob canvas: ' + canvas.width + 'x' + canvas.height +
+    ' (expected ' + width + 'x' + height + ')');
+
+  // Verify dimensions were actually set
+  if (canvas.width !== width || canvas.height !== height) {
+    console.error('[SampleArchitect] Canvas dimension mismatch! Got ' +
+      canvas.width + 'x' + canvas.height + ', expected ' + width + 'x' + height);
   }
 
   var ctx = canvas.getContext('2d');
@@ -77,16 +82,25 @@ async function generateKnobStrip() {
     ctx.fill();
   }
 
-  // Export to PNG
-  var blob;
-  if (typeof canvas.convertToBlob === 'function') {
-    blob = await canvas.convertToBlob({ type: 'image/png' });
-  } else {
-    blob = await new Promise(function(resolve) {
-      canvas.toBlob(resolve, 'image/png');
-    });
-  }
+  // Export to PNG via DOM canvas toBlob
+  var blob = await new Promise(function(resolve) {
+    canvas.toBlob(resolve, 'image/png');
+  });
 
   var arrayBuffer = await blob.arrayBuffer();
-  return new Uint8Array(arrayBuffer);
+  var pngBytes = new Uint8Array(arrayBuffer);
+
+  // Verify PNG dimensions by reading IHDR chunk (bytes 16-23)
+  if (pngBytes.length > 24) {
+    var pngWidth = (pngBytes[16] << 24) | (pngBytes[17] << 16) | (pngBytes[18] << 8) | pngBytes[19];
+    var pngHeight = (pngBytes[20] << 24) | (pngBytes[21] << 16) | (pngBytes[22] << 8) | pngBytes[23];
+    console.log('[SampleArchitect] Knob PNG IHDR: ' + pngWidth + 'x' + pngHeight +
+      ' (' + pngBytes.length + ' bytes)');
+    if (pngWidth !== width || pngHeight !== height) {
+      console.error('[SampleArchitect] PNG dimension mismatch! IHDR says ' +
+        pngWidth + 'x' + pngHeight + ', expected ' + width + 'x' + height);
+    }
+  }
+
+  return pngBytes;
 }

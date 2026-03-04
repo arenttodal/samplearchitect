@@ -147,8 +147,8 @@ assert('Reverb := 300000',    ksp.includes('$Reverb := 300000'));
 console.log('\n=== Test 10: UI Control Handlers (no scaling) ===');
 assert('Volume handler',    ksp.includes('set_engine_par($ENGINE_PAR_VOLUME, $Volume, -1, -1, -1)'));
 assert('Pan handler',       ksp.includes('set_engine_par($ENGINE_PAR_PAN, $Pan, -1, -1, -1)'));
-assert('Attack handler',    ksp.includes('set_engine_par($ENGINE_PAR_ATTACK, $Attack, -1, -1, -1)'));
-assert('Release handler',   ksp.includes('set_engine_par($ENGINE_PAR_RELEASE, $Release, -1, -1, -1)'));
+assert('Attack handler',    ksp.includes('set_engine_par($ENGINE_PAR_ATTACK, $Attack, 0, -1, -1)'));
+assert('Release handler',   ksp.includes('set_engine_par($ENGINE_PAR_RELEASE, $Release, 0, -1, -1)'));
 assert('Tune handler',      ksp.includes('set_engine_par($ENGINE_PAR_TUNE, $Tune, -1, -1, -1)'));
 assert('Cutoff handler',    ksp.includes('set_engine_par($ENGINE_PAR_CUTOFF, $Cutoff, 0, 0, -1)'));
 assert('Resonance handler', ksp.includes('set_engine_par($ENGINE_PAR_RESONANCE, $Resonance, 0, 0, -1)'));
@@ -212,11 +212,9 @@ assert('has get_ui_id',                  ksp.includes('get_ui_id($'));
 const knobPicMatches = (ksp.match(/set_control_par_str\(get_ui_id\(\$\w+\), \$CONTROL_PAR_PICTURE, "sa_knob"\)/g) || []).length;
 assert('8 knob skin assignments', knobPicMatches === 8);
 
-// All 8 knobs have WIDTH=54 and HEIGHT=54 to match frame size
-const widthMatches = (ksp.match(/\$CONTROL_PAR_WIDTH, 54\)/g) || []).length;
-const heightMatches = (ksp.match(/\$CONTROL_PAR_HEIGHT, 54\)/g) || []).length;
-assert('8 knob WIDTH=54', widthMatches === 8);
-assert('8 knob HEIGHT=54', heightMatches === 8);
+// No CONTROL_PAR_WIDTH/HEIGHT — Kontakt reads frame size from PNG directly
+assert('no CONTROL_PAR_WIDTH', !ksp.includes('$CONTROL_PAR_WIDTH'));
+assert('no CONTROL_PAR_HEIGHT', !ksp.includes('$CONTROL_PAR_HEIGHT'));
 
 // 8 knobs have POS_X and POS_Y (no title label anymore)
 const posXMatches = (ksp.match(/\$CONTROL_PAR_POS_X/g) || []).length;
