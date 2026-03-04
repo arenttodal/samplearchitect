@@ -6,6 +6,17 @@
 /* No scaling math — values passed directly to set_engine_par().     */
 /* Constants verified against KSP 6.0.2 Reference Manual.           */
 
+var KNOB_VAR_NAMES = {
+  volume: 'Volume',
+  pan: 'Pan',
+  attack: 'Attack',
+  release: 'Release',
+  tune: 'Tune',
+  cutoff: 'Cutoff',
+  resonance: 'Resonance',
+  reverb: 'Reverb'
+};
+
 function generateKSP(samples, stats, config) {
   var lines = [];
   var mapped = samples.filter(function(s) { return s.parsed; });
@@ -25,7 +36,21 @@ function generateKSP(samples, stats, config) {
   lines.push('  set_script_title("' + instrumentName + ' - SampleArchitect")');
   lines.push('  message("' + instrumentName + ' | ' + enabledControls.length + ' controls | SampleArchitect")');
 
-  // UI Controls
+  // GUI Setup — custom performance view with positioned knobs
+  if (enabledControls.length > 0) {
+    var maxPerRow = 6;
+    var numRows = Math.ceil(enabledControls.length / maxPerRow);
+    var uiHeight = numRows <= 1 ? 250 : 330;
+
+    lines.push('');
+    lines.push('  { GUI Setup }');
+    lines.push('  make_perfview');
+    lines.push('  set_ui_height_px(' + uiHeight + ')');
+    lines.push('  set_skin_offset(0)');
+  }
+
+  // UI Controls — declarations
+  var knobNames = [];
   if (enabledControls.length > 0) {
     lines.push('');
     lines.push('  { UI Controls }');
@@ -33,6 +58,8 @@ function generateKSP(samples, stats, config) {
 
   enabledControls.forEach(function(item) {
     var key = item.key;
+    var varName = KNOB_VAR_NAMES[key];
+    knobNames.push(varName);
     lines.push('');
 
     if (key === 'volume') {
@@ -86,6 +113,25 @@ function generateKSP(samples, stats, config) {
     }
   });
 
+  // Knob Positioning — arrange in a grid layout
+  if (knobNames.length > 0) {
+    var startX = 20;
+    var startY = 50;
+    var spacing = 100;
+    var maxPerRow = 6;
+
+    lines.push('');
+    lines.push('  { Knob Positioning }');
+    knobNames.forEach(function(name, index) {
+      var row = Math.floor(index / maxPerRow);
+      var col = index % maxPerRow;
+      var x = startX + (col * spacing);
+      var y = startY + (row * 80);
+      lines.push('  set_control_par(get_ui_id($' + name + '), $CONTROL_PAR_POS_X, ' + x + ')');
+      lines.push('  set_control_par(get_ui_id($' + name + '), $CONTROL_PAR_POS_Y, ' + y + ')');
+    });
+  }
+
   // Effects Chain (verified working in Kontakt 6)
   if (activeEffects.length > 0) {
     lines.push('');
@@ -93,13 +139,10 @@ function generateKSP(samples, stats, config) {
 
     activeEffects.forEach(function(item) {
       if (item.key === 'filter') {
-        // Filter in group insert slot 0
         lines.push('  set_engine_par($ENGINE_PAR_EFFECT_TYPE, $EFFECT_TYPE_FILTER, 0, 0, -1)');
       } else if (item.key === 'reverb') {
-        // Reverb in instrument insert slot 0
         lines.push('  set_engine_par($ENGINE_PAR_EFFECT_TYPE, $EFFECT_TYPE_REVERB, -1, 0, 1)');
       } else if (item.key === 'delay') {
-        // Delay in instrument insert slot 1
         lines.push('  set_engine_par($ENGINE_PAR_EFFECT_TYPE, $EFFECT_TYPE_DELAY, -1, 1, 1)');
       }
     });
