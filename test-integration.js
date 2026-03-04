@@ -190,7 +190,8 @@ const firstCmdAfterInit = lines.slice(initIdx + 1).find(l => l.trim() !== '' && 
 assert('make_perfview is first command', firstCmdAfterInit && firstCmdAfterInit.trim() === 'make_perfview');
 
 assert('has set_ui_height_px',  ksp.includes('set_ui_height_px('));
-assert('has set_ui_color',      ksp.includes('set_ui_color(ff0a0a0bh)'));
+assert('has set_ui_color decimal', ksp.includes('set_ui_color(-16119285)'));
+assert('no hex literals in KSP',   !ksp.match(/[0-9a-f]+h\b/i));
 assert('has message("")',       ksp.includes('message("")'));
 assert('no set_skin_offset',    !ksp.includes('set_skin_offset'));
 
