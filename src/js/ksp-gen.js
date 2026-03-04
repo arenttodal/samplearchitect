@@ -106,6 +106,17 @@ function generateKSP(samples, stats, config) {
     lines.push('  set_control_par_str(get_ui_id($' + varName + '), $CONTROL_PAR_PICTURE, "sa_knob")');
   });
 
+  // Apply init defaults for group-level params (envelope params need group 0)
+  enabledControls.forEach(function(item) {
+    var key = item.key;
+    var varName = KNOB_VAR_NAMES[key];
+    if (key === 'attack') {
+      lines.push('  set_engine_par($ENGINE_PAR_ATTACK, $' + varName + ', 0, -1, -1)');
+    } else if (key === 'release') {
+      lines.push('  set_engine_par($ENGINE_PAR_RELEASE, $' + varName + ', 0, -1, -1)');
+    }
+  });
+
   // Effects Chain (verified working in Kontakt 6)
   if (activeEffects.length > 0) {
     lines.push('');
@@ -151,11 +162,11 @@ function generateKSP(samples, stats, config) {
         lines.push('end on');
       } else if (key === 'attack') {
         lines.push('on ui_control ($' + varName + ')');
-        lines.push('  set_engine_par($ENGINE_PAR_ATTACK, $' + varName + ', -1, -1, -1)');
+        lines.push('  set_engine_par($ENGINE_PAR_ATTACK, $' + varName + ', 0, -1, -1)');
         lines.push('end on');
       } else if (key === 'release') {
         lines.push('on ui_control ($' + varName + ')');
-        lines.push('  set_engine_par($ENGINE_PAR_RELEASE, $' + varName + ', -1, -1, -1)');
+        lines.push('  set_engine_par($ENGINE_PAR_RELEASE, $' + varName + ', 0, -1, -1)');
         lines.push('end on');
       } else if (key === 'tune') {
         lines.push('on ui_control ($' + varName + ')');
