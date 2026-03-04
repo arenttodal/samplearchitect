@@ -8,25 +8,26 @@ function findTrimPoints(audioBuffer, thresholdDb) {
   if (thresholdDb === undefined) thresholdDb = -40;
 
   var data = audioBuffer.getChannelData(0);
-  var threshold = Math.pow(10, thresholdDb / 20);
+  var startThreshold = Math.pow(10, thresholdDb / 20);    // -40dB for attack detection
+  var endThreshold = Math.pow(10, -70 / 20);              // -70dB for tail detection
   var sampleRate = audioBuffer.sampleRate;
 
-  // Find first sample above threshold
+  // Find first sample above start threshold
   var trimStart = 0;
   for (var i = 0; i < data.length; i++) {
-    if (Math.abs(data[i]) > threshold) {
+    if (Math.abs(data[i]) > startThreshold) {
       // Leave 50ms pre-roll to preserve full attack transient
       trimStart = Math.max(0, i - Math.floor(sampleRate * 0.05));
       break;
     }
   }
 
-  // Find last sample above threshold
+  // Find last sample above end threshold (only trims true digital silence)
   var trimEnd = data.length;
   for (var j = data.length - 1; j >= 0; j--) {
-    if (Math.abs(data[j]) > threshold) {
-      // Leave 10ms tail for natural decay
-      trimEnd = Math.min(data.length, j + Math.floor(sampleRate * 0.01));
+    if (Math.abs(data[j]) > endThreshold) {
+      // Leave 200ms tail to preserve natural decay
+      trimEnd = Math.min(data.length, j + Math.floor(sampleRate * 0.2));
       break;
     }
   }
