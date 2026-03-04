@@ -1,4 +1,5 @@
 /* trimmer.js — Trim leading silence from WAV samples */
+/* Uses Web Audio API for decoding — no manual WAV byte parsing */
 
 /**
  * Find trim points in a decoded AudioBuffer.
@@ -41,106 +42,93 @@ function findTrimPoints(audioBuffer, thresholdDb) {
 }
 
 /**
- * Parse a WAV file header from raw bytes.
- * Returns format info needed for trimming.
+ * Encode an AudioBuffer to a 16-bit PCM WAV file.
+ * This is the ONLY WAV writing code in the app — no byte-level header parsing.
  */
-function parseWavHeader(bytes) {
-  var view = new DataView(bytes.buffer || bytes);
-
-  // Verify RIFF header
-  var riff = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
-  if (riff !== 'RIFF') return null;
-
-  var wave = String.fromCharCode(view.getUint8(8), view.getUint8(9), view.getUint8(10), view.getUint8(11));
-  if (wave !== 'WAVE') return null;
-
-  var numChannels = 0;
-  var sampleRate = 0;
-  var bitsPerSample = 0;
-  var dataOffset = 0;
-  var dataSize = 0;
-  var fmtFound = false;
-
-  // Walk through chunks
-  var offset = 12;
-  while (offset < bytes.length - 8) {
-    var chunkId = String.fromCharCode(
-      view.getUint8(offset), view.getUint8(offset + 1),
-      view.getUint8(offset + 2), view.getUint8(offset + 3)
-    );
-    var chunkSize = view.getUint32(offset + 4, true);
-
-    if (chunkId === 'fmt ') {
-      numChannels = view.getUint16(offset + 10, true);
-      sampleRate = view.getUint32(offset + 12, true);
-      bitsPerSample = view.getUint16(offset + 22, true);
-      fmtFound = true;
-    } else if (chunkId === 'data') {
-      dataOffset = offset + 8;
-      dataSize = chunkSize;
-      break;
-    }
-
-    offset += 8 + chunkSize;
-    // Chunks are word-aligned
-    if (chunkSize % 2 !== 0) offset++;
-  }
-
-  if (!fmtFound || dataOffset === 0) return null;
-
-  var bytesPerSample = bitsPerSample / 8;
+function audioBufferToWav(buffer) {
+  var numChannels = buffer.numberOfChannels;
+  var sampleRate = buffer.sampleRate;
+  var format = 1; // PCM
+  var bitDepth = 16;
+  var bytesPerSample = bitDepth / 8;
   var blockAlign = numChannels * bytesPerSample;
 
-  return {
-    numChannels: numChannels,
-    sampleRate: sampleRate,
-    bitsPerSample: bitsPerSample,
-    bytesPerSample: bytesPerSample,
-    blockAlign: blockAlign,
-    dataOffset: dataOffset,
-    dataSize: dataSize,
-    headerBytes: bytes.slice(0, dataOffset)
-  };
+  var channels = [];
+  for (var i = 0; i < numChannels; i++) {
+    channels.push(buffer.getChannelData(i));
+  }
+  var numSamples = channels[0].length;
+  var dataSize = numSamples * blockAlign;
+  var headerSize = 44;
+  var arrayBuffer = new ArrayBuffer(headerSize + dataSize);
+  var view = new DataView(arrayBuffer);
+
+  // RIFF header
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, format, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  writeString(view, 36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  var offset = 44;
+  for (var s = 0; s < numSamples; s++) {
+    for (var ch = 0; ch < numChannels; ch++) {
+      var sample = Math.max(-1, Math.min(1, channels[ch][s]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+  return new Uint8Array(arrayBuffer);
+}
+
+function writeString(view, offset, string) {
+  for (var i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
 }
 
 /**
- * Trim a WAV file's raw bytes based on sample indices.
- * Returns new Uint8Array with a valid WAV file.
+ * Export a sample using the Web Audio API pipeline (identical to preview).
+ * Decodes via decodeAudioData, slices the AudioBuffer, re-encodes to WAV.
+ * Guaranteed to match what the preview plays.
  */
-function trimWavBytes(rawBytes, trimStartSample, trimEndSample) {
-  var bytes = new Uint8Array(rawBytes);
-  var header = parseWavHeader(bytes);
-  if (!header) return bytes; // Can't parse, return original
+async function exportTrimmedSample(fileBytes, trimStartSample, outputPath) {
+  var ctx = getAudioContext();
+  var arrayBuffer = new Uint8Array(fileBytes).buffer.slice(0);
+  var audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
-  var blockAlign = header.blockAlign;
-  var startByte = header.dataOffset + (trimStartSample * blockAlign);
-  var endByte = header.dataOffset + (trimEndSample * blockAlign);
+  var startSample = trimStartSample || 0;
+  var length = audioBuffer.length - startSample;
 
-  // Clamp to actual data bounds
-  startByte = Math.max(header.dataOffset, startByte);
-  endByte = Math.min(header.dataOffset + header.dataSize, endByte);
+  var outputBuffer = new AudioBuffer({
+    numberOfChannels: audioBuffer.numberOfChannels,
+    length: length,
+    sampleRate: audioBuffer.sampleRate
+  });
+  for (var ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+    var source = audioBuffer.getChannelData(ch);
+    var dest = outputBuffer.getChannelData(ch);
+    dest.set(source.subarray(startSample));
+  }
 
-  var newDataSize = endByte - startByte;
-  var trimmedData = bytes.slice(startByte, endByte);
+  var wavBytes = audioBufferToWav(outputBuffer);
 
-  // Rebuild WAV file: reuse everything before data chunk, update sizes
-  // Find the data chunk header position (dataOffset - 8)
-  var dataChunkHeaderPos = header.dataOffset - 8;
+  console.log(
+    '  Encoded via Web Audio: ' + audioBuffer.numberOfChannels + 'ch, ' +
+    audioBuffer.sampleRate + 'Hz, startSample=' + startSample +
+    ', outputSamples=' + length + ', wavSize=' + wavBytes.length
+  );
 
-  // Copy everything before data chunk + data chunk header
-  var preDataBytes = bytes.slice(0, header.dataOffset);
-  var newFileSize = preDataBytes.length + newDataSize;
-
-  var output = new Uint8Array(newFileSize);
-  output.set(preDataBytes, 0);
-  output.set(trimmedData, preDataBytes.length);
-
-  // Update RIFF chunk size (offset 4): fileSize - 8
-  var outView = new DataView(output.buffer);
-  outView.setUint32(4, newFileSize - 8, true);
-
-  // Update data chunk size (dataChunkHeaderPos + 4)
-  outView.setUint32(dataChunkHeaderPos + 4, newDataSize, true);
-
-  return output;
+  await window.__TAURI__.core.invoke('write_file_bytes', {
+    path: outputPath,
+    bytes: Array.from(wavBytes)
+  });
 }

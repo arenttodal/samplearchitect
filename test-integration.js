@@ -264,82 +264,83 @@ Object.keys(origEnabled).forEach(k => {
   context.templateConfig.controls[k].enabled = origEnabled[k];
 });
 
-// ── Test 18: Trimmer — WAV header parsing ──
-console.log('\n=== Test 18: Trimmer (WAV Parsing) ===');
+// ── Test 18: WAV Encoder (audioBufferToWav) ──
+console.log('\n=== Test 18: WAV Encoder ===');
 
-// Create a minimal valid WAV file in memory
-const trimTestCode = `
+const wavEncTestCode = `
 (function() {
-  // Build a minimal 16-bit mono WAV: 44 byte header + 100 samples of data
+  // Test writeString
+  var testBuf = new ArrayBuffer(4);
+  var testView = new DataView(testBuf);
+  writeString(testView, 0, 'RIFF');
+  var writeStringOk = (testView.getUint8(0) === 82 && testView.getUint8(1) === 73 &&
+                        testView.getUint8(2) === 70 && testView.getUint8(3) === 70);
+
+  // Test audioBufferToWav with a mock AudioBuffer
+  // Create a minimal mock that matches the AudioBuffer interface
   var numSamples = 100;
-  var numChannels = 1;
   var sampleRate = 44100;
-  var bitsPerSample = 16;
-  var bytesPerSample = bitsPerSample / 8;
-  var blockAlign = numChannels * bytesPerSample;
-  var dataSize = numSamples * blockAlign;
-  var fileSize = 44 + dataSize;
-
-  var buf = new Uint8Array(fileSize);
-  var view = new DataView(buf.buffer);
-
-  // RIFF header
-  buf[0]=82; buf[1]=73; buf[2]=70; buf[3]=70; // "RIFF"
-  view.setUint32(4, fileSize - 8, true);
-  buf[8]=87; buf[9]=65; buf[10]=86; buf[11]=69; // "WAVE"
-
-  // fmt chunk
-  buf[12]=102; buf[13]=109; buf[14]=116; buf[15]=32; // "fmt "
-  view.setUint32(16, 16, true); // chunk size
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * blockAlign, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitsPerSample, true);
-
-  // data chunk
-  buf[36]=100; buf[37]=97; buf[38]=116; buf[39]=97; // "data"
-  view.setUint32(40, dataSize, true);
-
-  // Write some audio: first 20 samples silence, then signal, then 20 samples silence
+  var numChannels = 1;
+  var channelData = new Float32Array(numSamples);
+  // Fill with a known pattern: silence then signal
   for (var i = 0; i < numSamples; i++) {
-    var val = 0;
-    if (i >= 20 && i < 80) {
-      val = 16000; // loud signal
-    }
-    view.setInt16(44 + i * 2, val, true);
+    channelData[i] = (i >= 20 && i < 80) ? 0.5 : 0.0;
   }
 
-  var header = parseWavHeader(buf);
+  var mockBuffer = {
+    numberOfChannels: numChannels,
+    sampleRate: sampleRate,
+    length: numSamples,
+    getChannelData: function(ch) { return channelData; }
+  };
+
+  var wav = audioBufferToWav(mockBuffer);
   var result = {};
-  result.headerOk = (header !== null);
-  result.channels = header ? header.numChannels : 0;
-  result.sampleRate = header ? header.sampleRate : 0;
-  result.bitsPerSample = header ? header.bitsPerSample : 0;
-  result.dataOffset = header ? header.dataOffset : 0;
-  result.dataSize = header ? header.dataSize : 0;
 
-  // Test trimming
-  var trimmed = trimWavBytes(buf, 15, 85);
-  result.trimmedLength = trimmed.length;
-  var trimmedHeader = parseWavHeader(trimmed);
-  result.trimmedDataSize = trimmedHeader ? trimmedHeader.dataSize : 0;
-  // Expected: 70 samples * 2 bytes = 140 bytes
-  result.expectedTrimmedDataSize = 70 * 2;
+  // Check it's a valid WAV
+  result.isUint8Array = (wav instanceof Uint8Array);
+  result.size = wav.length;
+  result.expectedSize = 44 + (numSamples * numChannels * 2); // header + 16-bit PCM data
 
+  var wavView = new DataView(wav.buffer);
+  // RIFF header
+  result.riff = String.fromCharCode(wav[0], wav[1], wav[2], wav[3]);
+  result.wave = String.fromCharCode(wav[8], wav[9], wav[10], wav[11]);
+  result.fmt = String.fromCharCode(wav[12], wav[13], wav[14], wav[15]);
+  result.data = String.fromCharCode(wav[36], wav[37], wav[38], wav[39]);
+
+  // Format fields
+  result.pcmFormat = wavView.getUint16(20, true);
+  result.channels = wavView.getUint16(22, true);
+  result.wavSampleRate = wavView.getUint32(24, true);
+  result.bitDepth = wavView.getUint16(34, true);
+  result.dataSize = wavView.getUint32(40, true);
+  result.expectedDataSize = numSamples * numChannels * 2;
+
+  // Check audio content: sample 0 should be 0 (silence), sample 20 should be nonzero
+  result.silentSample = wavView.getInt16(44, true);
+  result.signalSample = wavView.getInt16(44 + 20 * 2, true);
+
+  result.writeStringOk = writeStringOk;
   return result;
 })()
 `;
 
-const trimResult = vm.runInContext(trimTestCode, context);
-assert('WAV header parsed',     trimResult.headerOk);
-assert('channels = 1',          trimResult.channels === 1);
-assert('sampleRate = 44100',    trimResult.sampleRate === 44100);
-assert('bitsPerSample = 16',    trimResult.bitsPerSample === 16);
-assert('dataOffset = 44',       trimResult.dataOffset === 44);
-assert('dataSize = 200',        trimResult.dataSize === 200);
-assert('trimmed data correct',  trimResult.trimmedDataSize === trimResult.expectedTrimmedDataSize);
+const wavResult = vm.runInContext(wavEncTestCode, context);
+assert('writeString works',      wavResult.writeStringOk);
+assert('output is Uint8Array',   wavResult.isUint8Array);
+assert('correct file size',      wavResult.size === wavResult.expectedSize);
+assert('RIFF header',            wavResult.riff === 'RIFF');
+assert('WAVE marker',            wavResult.wave === 'WAVE');
+assert('fmt chunk',              wavResult.fmt === 'fmt ');
+assert('data chunk',             wavResult.data === 'data');
+assert('PCM format = 1',        wavResult.pcmFormat === 1);
+assert('channels = 1',          wavResult.channels === 1);
+assert('sampleRate = 44100',    wavResult.wavSampleRate === 44100);
+assert('bitDepth = 16',         wavResult.bitDepth === 16);
+assert('data size correct',     wavResult.dataSize === wavResult.expectedDataSize);
+assert('silent sample = 0',     wavResult.silentSample === 0);
+assert('signal sample nonzero', wavResult.signalSample !== 0);
 
 // ── Test 19: Verify no plugins key in tauri.conf.json ──
 console.log('\n=== Test 19: Tauri Config ===');
