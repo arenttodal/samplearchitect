@@ -56,6 +56,15 @@ fn read_file_bytes(path: String) -> Result<Vec<u8>, String> {
     std::fs::read(&path).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn write_file_bytes(path: String, bytes: Vec<u8>) -> Result<(), String> {
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
@@ -66,7 +75,8 @@ pub fn run() {
             copy_file,
             write_text_file,
             create_directory,
-            read_file_bytes
+            read_file_bytes,
+            write_file_bytes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

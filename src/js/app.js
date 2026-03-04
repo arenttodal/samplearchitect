@@ -130,7 +130,7 @@ async function handleFileDrop(dirPath) {
     assignKeyRanges(state.samples);
     assignVelocityRanges(state.samples);
 
-    // Render
+    // Render immediately (trim analysis runs in background)
     renderFileList();
     renderKeyboardView();
     updateValidation();
@@ -139,9 +139,33 @@ async function handleFileDrop(dirPath) {
     document.getElementById('dropZone').classList.add('hidden');
     document.getElementById('keyboardContainer').style.display = '';
 
+    // Auto-trim analysis (runs async, updates UI as each sample completes)
+    analyzeTrimAll(state.samples);
+
   } catch (err) {
     console.error('File drop handling failed:', err);
   }
+}
+
+async function analyzeTrimAll(samples) {
+  for (var i = 0; i < samples.length; i++) {
+    var s = samples[i];
+    try {
+      var trim = await analyzeSampleTrim(s.path);
+      if (trim) {
+        s.trimStart = trim.startTime;
+        s.trimEnd = trim.endTime;
+        s.trimStartSample = trim.startSample;
+        s.trimEndSample = trim.endSample;
+        s.silenceRemoved = trim.silenceRemoved;
+        s.trimSignificant = trim.significant;
+      }
+    } catch (err) {
+      console.error('Trim analysis failed for', s.filename, err);
+    }
+  }
+  // Re-render file list to show trim indicators
+  renderFileList();
 }
 
 function renderFileList() {
@@ -173,19 +197,36 @@ function renderFileList() {
     row.className = 'file-row';
     if (index === state.selectedSampleIndex) row.classList.add('selected');
 
+    // Dot color: amber if significant silence was trimmed, else green/warn
     var dot = document.createElement('div');
-    dot.className = 'dot ' + (sample.parsed ? 'ok' : 'warn');
+    if (sample.parsed) {
+      dot.className = 'dot ' + (sample.trimSignificant ? 'warn' : 'ok');
+    } else {
+      dot.className = 'dot warn';
+    }
 
     var fname = document.createElement('span');
     fname.className = 'filename';
     fname.textContent = sample.filename;
 
+    // Trim indicator
+    if (sample.silenceRemoved != null && sample.silenceRemoved > 0.01) {
+      var trimTag = document.createElement('span');
+      trimTag.className = 'trim-tag';
+      trimTag.textContent = '-' + sample.silenceRemoved.toFixed(1) + 's';
+      fname.appendChild(document.createTextNode(' '));
+      row.appendChild(dot);
+      row.appendChild(fname);
+      row.appendChild(trimTag);
+    } else {
+      row.appendChild(dot);
+      row.appendChild(fname);
+    }
+
     var pitch = document.createElement('span');
     pitch.className = 'pitch-label';
     pitch.textContent = sample.parsed ? formatNoteName(sample.note, sample.accidental, sample.octave) : '?';
 
-    row.appendChild(dot);
-    row.appendChild(fname);
     row.appendChild(pitch);
 
     row.addEventListener('click', function() {
@@ -223,6 +264,12 @@ function renderSampleDetail() {
 
   if (sample.parsed) {
     var keyRange = (sample.lowKey != null && sample.highKey != null) ? (sample.lowKey + '\u2013' + sample.highKey) : '\u2014';
+    var trimInfo = '\u2014';
+    if (sample.silenceRemoved != null && sample.silenceRemoved > 0.01) {
+      trimInfo = '-' + sample.silenceRemoved.toFixed(2) + 's';
+    } else if (sample.silenceRemoved != null) {
+      trimInfo = 'Clean';
+    }
     container.innerHTML =
       '<div class="inner-panel">' +
       '<div class="detail-grid">' +
@@ -232,6 +279,7 @@ function renderSampleDetail() {
       '<div class="detail-item"><span class="label">ARTICULATION</span><div class="value">' + (sample.articulation || '\u2014') + '</div></div>' +
       '<div class="detail-item"><span class="label">ROUND ROBIN</span><div class="value">' + (sample.roundRobin || '\u2014') + '</div></div>' +
       '<div class="detail-item"><span class="label">KEY RANGE</span><div class="value">' + keyRange + '</div></div>' +
+      '<div class="detail-item"><span class="label">TRIMMED</span><div class="value">' + trimInfo + '</div></div>' +
       '</div>' +
       '<div class="detail-actions">' +
       '<button class="btn-secondary" id="btnPreview">Preview</button>' +
@@ -239,7 +287,7 @@ function renderSampleDetail() {
       '</div>';
 
     document.getElementById('btnPreview').addEventListener('click', function() {
-      previewSample(sample.path);
+      previewSample(sample.path, sample.trimStart, sample.trimEnd);
     });
   } else {
     // Unmatched: show assignment form
@@ -275,7 +323,7 @@ function renderSampleDetail() {
     });
 
     document.getElementById('btnPreviewUnmatched').addEventListener('click', function() {
-      previewSample(sample.path);
+      previewSample(sample.path, sample.trimStart, sample.trimEnd);
     });
   }
 }
@@ -640,6 +688,9 @@ document.addEventListener('DOMContentLoaded', function() {
       window.__TAURI__.shell.open(state.outputPath + '/Setup Guide.txt');
     }
   });
+
+  // Initialize MIDI support
+  initMIDI();
 
   // Set initial phase
   goToPhase(1);

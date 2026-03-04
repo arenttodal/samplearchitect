@@ -13,8 +13,12 @@ const context = vm.createContext({
   Object: Object,
   Array: Array,
   Map: Map,
+  Uint8Array: Uint8Array,
+  DataView: DataView,
+  String: String,
   document: null,
-  window: {}
+  window: {},
+  navigator: {}
 });
 
 // Evaluate modules in order in the same context
@@ -22,6 +26,7 @@ const modules = [
   'src/js/parser.js',
   'src/js/mapper.js',
   'src/js/template.js',
+  'src/js/trimmer.js',
   'src/js/ksp-gen.js'
 ];
 
@@ -175,6 +180,144 @@ assert('no * 6300',  !ksp.includes('* 6300'));
 assert('no * 10000', !ksp.includes('* 10000'));
 assert('no * 1000',  !ksp.includes('* 1000'));
 assert('no * 10',    !ksp.includes('* 10'));
+
+// ── Test 15: GUI Skin — Performance View Setup ──
+console.log('\n=== Test 15: GUI Skin (Performance View) ===');
+assert('has make_perfview',     ksp.includes('make_perfview'));
+assert('has set_ui_height_px',  ksp.includes('set_ui_height_px('));
+assert('has set_skin_offset',   ksp.includes('set_skin_offset(0)'));
+
+// ── Test 16: GUI Skin — Knob Positioning ──
+console.log('\n=== Test 16: Knob Positioning ===');
+assert('has CONTROL_PAR_POS_X', ksp.includes('$CONTROL_PAR_POS_X'));
+assert('has CONTROL_PAR_POS_Y', ksp.includes('$CONTROL_PAR_POS_Y'));
+assert('has get_ui_id',         ksp.includes('get_ui_id($'));
+
+// Verify all 8 knobs have position set (X and Y for each)
+const posXMatches = (ksp.match(/\$CONTROL_PAR_POS_X/g) || []).length;
+const posYMatches = (ksp.match(/\$CONTROL_PAR_POS_Y/g) || []).length;
+assert('8 knob X positions', posXMatches === 8);
+assert('8 knob Y positions', posYMatches === 8);
+
+// Verify 2-row layout for 8 knobs (more than 6 = 2 rows)
+assert('330px height for 8 knobs', ksp.includes('set_ui_height_px(330)'));
+
+// Verify specific knob positions
+assert('Volume at X=20',  ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_X, 20'));
+assert('Volume at Y=50',  ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_Y, 50'));
+assert('Pan at X=120',    ksp.includes('get_ui_id($Pan), $CONTROL_PAR_POS_X, 120'));
+assert('Reverb at X=120', ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_X, 120'));
+assert('Reverb at Y=130', ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_Y, 130'));
+
+// ── Test 17: GUI Skin — Verify layout with fewer knobs ──
+console.log('\n=== Test 17: GUI Skin (Fewer Knobs) ===');
+// Temporarily disable some controls to test single row
+const origEnabled = {};
+Object.keys(context.templateConfig.controls).forEach(k => {
+  origEnabled[k] = context.templateConfig.controls[k].enabled;
+});
+
+// Enable only 4 knobs
+Object.keys(context.templateConfig.controls).forEach(k => {
+  context.templateConfig.controls[k].enabled = false;
+});
+context.templateConfig.controls.volume.enabled = true;
+context.templateConfig.controls.pan.enabled = true;
+context.templateConfig.controls.attack.enabled = true;
+context.templateConfig.controls.release.enabled = true;
+
+const ksp4 = vm.runInContext('generateKSP(samples, stats, templateConfig)', context);
+assert('4 knobs: 250px height', ksp4.includes('set_ui_height_px(250)'));
+const posX4 = (ksp4.match(/\$CONTROL_PAR_POS_X/g) || []).length;
+assert('4 knobs: 4 X positions', posX4 === 4);
+assert('4 knobs: Attack at X=220', ksp4.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 220'));
+
+// Restore
+Object.keys(origEnabled).forEach(k => {
+  context.templateConfig.controls[k].enabled = origEnabled[k];
+});
+
+// ── Test 18: Trimmer — WAV header parsing ──
+console.log('\n=== Test 18: Trimmer (WAV Parsing) ===');
+
+// Create a minimal valid WAV file in memory
+const trimTestCode = `
+(function() {
+  // Build a minimal 16-bit mono WAV: 44 byte header + 100 samples of data
+  var numSamples = 100;
+  var numChannels = 1;
+  var sampleRate = 44100;
+  var bitsPerSample = 16;
+  var bytesPerSample = bitsPerSample / 8;
+  var blockAlign = numChannels * bytesPerSample;
+  var dataSize = numSamples * blockAlign;
+  var fileSize = 44 + dataSize;
+
+  var buf = new Uint8Array(fileSize);
+  var view = new DataView(buf.buffer);
+
+  // RIFF header
+  buf[0]=82; buf[1]=73; buf[2]=70; buf[3]=70; // "RIFF"
+  view.setUint32(4, fileSize - 8, true);
+  buf[8]=87; buf[9]=65; buf[10]=86; buf[11]=69; // "WAVE"
+
+  // fmt chunk
+  buf[12]=102; buf[13]=109; buf[14]=116; buf[15]=32; // "fmt "
+  view.setUint32(16, 16, true); // chunk size
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+
+  // data chunk
+  buf[36]=100; buf[37]=97; buf[38]=116; buf[39]=97; // "data"
+  view.setUint32(40, dataSize, true);
+
+  // Write some audio: first 20 samples silence, then signal, then 20 samples silence
+  for (var i = 0; i < numSamples; i++) {
+    var val = 0;
+    if (i >= 20 && i < 80) {
+      val = 16000; // loud signal
+    }
+    view.setInt16(44 + i * 2, val, true);
+  }
+
+  var header = parseWavHeader(buf);
+  var result = {};
+  result.headerOk = (header !== null);
+  result.channels = header ? header.numChannels : 0;
+  result.sampleRate = header ? header.sampleRate : 0;
+  result.bitsPerSample = header ? header.bitsPerSample : 0;
+  result.dataOffset = header ? header.dataOffset : 0;
+  result.dataSize = header ? header.dataSize : 0;
+
+  // Test trimming
+  var trimmed = trimWavBytes(buf, 15, 85);
+  result.trimmedLength = trimmed.length;
+  var trimmedHeader = parseWavHeader(trimmed);
+  result.trimmedDataSize = trimmedHeader ? trimmedHeader.dataSize : 0;
+  // Expected: 70 samples * 2 bytes = 140 bytes
+  result.expectedTrimmedDataSize = 70 * 2;
+
+  return result;
+})()
+`;
+
+const trimResult = vm.runInContext(trimTestCode, context);
+assert('WAV header parsed',     trimResult.headerOk);
+assert('channels = 1',          trimResult.channels === 1);
+assert('sampleRate = 44100',    trimResult.sampleRate === 44100);
+assert('bitsPerSample = 16',    trimResult.bitsPerSample === 16);
+assert('dataOffset = 44',       trimResult.dataOffset === 44);
+assert('dataSize = 200',        trimResult.dataSize === 200);
+assert('trimmed data correct',  trimResult.trimmedDataSize === trimResult.expectedTrimmedDataSize);
+
+// ── Test 19: Verify no plugins key in tauri.conf.json ──
+console.log('\n=== Test 19: Tauri Config ===');
+const tauriConf = JSON.parse(fs.readFileSync(path.join(__dirname, 'src-tauri/tauri.conf.json'), 'utf-8'));
+assert('no plugins key', !('plugins' in tauriConf));
 
 // ── Final result ──
 if (failed) {
