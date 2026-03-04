@@ -90,12 +90,12 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     contents: 'has_alpha,  frames,  height, width, vert\n1,          1,       500,    633,   1\n'
   });
 
-  var knobBytes = await generateKnobStrip();
+  var knobBytes = getKnobPngBytes();
   await window.__TAURI__.core.invoke('write_file_bytes', {
     path: basePath + '/Resources/pictures/sa_knob.png',
     bytes: Array.from(knobBytes)
   });
-  console.log('[SampleArchitect] sa_knob.png written (' + knobBytes.length + ' bytes) to ' + basePath + '/Resources/pictures/sa_knob.png');
+  console.log('[SampleArchitect] sa_knob.png written (' + knobBytes.length + ' bytes, static asset) to ' + basePath + '/Resources/pictures/sa_knob.png');
 
   await window.__TAURI__.core.invoke('write_text_file', {
     path: basePath + '/Resources/pictures/sa_knob.txt',
