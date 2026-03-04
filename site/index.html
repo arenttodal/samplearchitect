@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SampleArchitect — Turn Your Recordings Into Playable Instruments</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #070709;
+  --surface: #0c0c10;
+  --card: #0f1014;
+  --card-border: rgba(255,255,255,0.06);
+  --card-border-hover: rgba(255,255,255,0.1);
+  --divider: rgba(255,255,255,0.05);
+  --h1: #ededed;
+  --h2: #d0d0d4;
+  --body: #8e8e98;
+  --muted: #5a5a64;
+  --faint: #33333b;
+  --accent: #3dd68c;
+  --accent-dim: rgba(61,214,140,0.12);
+  --accent-glow: rgba(61,214,140,0.06);
+  --red: #e85454;
+  --red-dim: rgba(232,84,84,0.08);
+  --serif: 'DM Serif Display', Georgia, serif;
+  --sans: 'DM Sans', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--body);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ── Utility ──────────────────────────────────────────── */
+.container { max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+.container-narrow { max-width: 800px; margin: 0 auto; padding: 0 32px; }
+
+.section-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-align: center;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.section-heading {
+  font-family: var(--serif);
+  font-size: clamp(32px, 5vw, 48px);
+  color: var(--h1);
+  text-align: center;
+  line-height: 1.2;
+  margin-bottom: 20px;
+  font-weight: 400;
+}
+
+.section-sub {
+  font-size: 16px;
+  color: var(--body);
+  text-align: center;
+  max-width: 560px;
+  margin: 0 auto 48px;
+  line-height: 1.7;
+}
+
+section { padding: 100px 0; }
+
+/* ── Nav ──────────────────────────────────────────────── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  padding: 16px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(7,7,9,0.85);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--divider);
+}
+
+.nav-logo {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none;
+}
+.nav-logo-icon {
+  width: 30px; height: 30px; border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: var(--muted);
+  font-family: var(--sans);
+}
+.nav-logo-text {
+  font-size: 15px; font-weight: 700; color: var(--h1);
+  font-family: var(--sans);
+}
+.nav-logo-text span { color: var(--muted); font-weight: 400; }
+
+.nav-cta {
+  padding: 8px 20px; border-radius: 8px;
+  background: var(--accent); color: #070709;
+  font-size: 13px; font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s;
+  font-family: var(--sans);
+}
+.nav-cta:hover { background: #4ee89c; transform: translateY(-1px); }
+
+/* ── Hero ─────────────────────────────────────────────── */
+.hero {
+  padding: 160px 0 120px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute; top: -40%; left: 50%; transform: translateX(-50%);
+  width: 140%; height: 80%;
+  background: radial-gradient(ellipse 60% 50% at 50% 20%, rgba(61,214,140,0.04) 0%, transparent 60%),
+              radial-gradient(ellipse 40% 40% at 30% 30%, rgba(40,80,60,0.05) 0%, transparent 50%),
+              radial-gradient(ellipse 35% 35% at 70% 25%, rgba(30,70,50,0.04) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 16px; border-radius: 20px;
+  background: var(--accent-dim);
+  border: 1px solid rgba(61,214,140,0.15);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 32px;
+  position: relative;
+}
+.hero-badge::before {
+  content: '';
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 2s ease infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.hero h1 {
+  font-family: var(--serif);
+  font-size: clamp(40px, 6.5vw, 72px);
+  color: var(--h1);
+  line-height: 1.12;
+  margin-bottom: 24px;
+  position: relative;
+  font-weight: 400;
+}
+.hero h1 em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.hero-sub {
+  font-size: 17px;
+  color: var(--body);
+  max-width: 580px;
+  margin: 0 auto 40px;
+  line-height: 1.75;
+}
+
+.hero-actions {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  margin-bottom: 16px;
+}
+
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 32px; border-radius: 10px;
+  background: var(--accent);
+  color: #070709; font-size: 15px; font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s;
+  font-family: var(--sans);
+  border: none; cursor: pointer;
+}
+.btn-primary:hover { background: #4ee89c; transform: translateY(-1px); box-shadow: 0 8px 32px rgba(61,214,140,0.2); }
+.btn-primary svg { width: 16px; height: 16px; }
+
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 28px; border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--card-border);
+  color: var(--body); font-size: 15px; font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s;
+  font-family: var(--sans);
+  cursor: pointer;
+}
+.btn-secondary:hover { border-color: var(--card-border-hover); color: var(--h2); }
+
+.hero-price {
+  font-size: 13px; color: var(--muted); margin-top: 4px;
+}
+
+/* ── Hero App Preview ─────────────────────────────────── */
+.hero-preview {
+  margin-top: 64px;
+  position: relative;
+  max-width: 900px;
+  margin-left: auto; margin-right: auto;
+}
+.hero-preview-window {
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
+}
+.hero-preview-bar {
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--divider);
+  display: flex; align-items: center; gap: 8px;
+}
+.hero-preview-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+}
+.hero-preview-bar span {
+  font-size: 11px; color: var(--faint); margin-left: 8px;
+  font-family: var(--sans);
+}
+.hero-preview-body {
+  height: 340px;
+  background: linear-gradient(175deg, #0a0a0e 0%, #0d0d12 50%, #0b0b0f 100%);
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero-preview-body::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 60% 80% at 50% 80%, rgba(61,214,140,0.03) 0%, transparent 60%);
+}
+.preview-placeholder {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  position: relative; z-index: 1;
+}
+.preview-play {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.2s;
+}
+.preview-play:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); }
+.preview-play svg { width: 18px; height: 18px; fill: var(--muted); margin-left: 2px; }
+.preview-label {
+  font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--faint); font-weight: 500;
+}
+
+/* ── Features ─────────────────────────────────────────── */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.feature-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 32px 28px;
+  transition: all 0.25s;
+}
+.feature-card:hover {
+  border-color: var(--card-border-hover);
+  transform: translateY(-2px);
+}
+.feature-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: var(--accent-dim);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 20px;
+}
+.feature-icon svg { width: 18px; height: 18px; stroke: var(--accent); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.feature-card h3 {
+  font-family: var(--sans);
+  font-size: 16px; font-weight: 700;
+  color: var(--h1); margin-bottom: 8px;
+}
+.feature-card p {
+  font-size: 14px; color: var(--body); line-height: 1.7;
+}
+
+/* ── Pain Points (The Old Way) ────────────────────────── */
+.pain-section { background: var(--surface); }
+.pain-italic {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--red);
+  text-align: center;
+  margin-bottom: 36px;
+  opacity: 0.8;
+}
+.pain-sub {
+  font-size: 16px; color: var(--body); text-align: center;
+  max-width: 620px; margin: 0 auto 40px; line-height: 1.75;
+}
+.pain-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  max-width: 860px;
+  margin: 0 auto;
+}
+.pain-card {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 18px 22px;
+  background: rgba(232,84,84,0.03);
+  border: 1px solid rgba(232,84,84,0.08);
+  border-radius: 10px;
+}
+.pain-x {
+  flex-shrink: 0;
+  width: 8px; height: 8px;
+  margin-top: 6px;
+  color: var(--red);
+  font-size: 12px; font-weight: 700;
+}
+.pain-card p {
+  font-size: 14px; color: var(--body); line-height: 1.6;
+}
+.pain-card:last-child p {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: rgba(232,84,84,0.7);
+}
+
+/* ── Solution ─────────────────────────────────────────── */
+.solution-italic {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--accent);
+  text-align: center;
+  opacity: 0.7;
+  margin-bottom: 48px;
+}
+
+/* ── How it Works ─────────────────────────────────────── */
+.steps-row {
+  display: flex;
+  gap: 0;
+  align-items: flex-start;
+  margin-top: 12px;
+}
+.step-item {
+  flex: 1;
+  text-align: center;
+  padding: 0 20px;
+  position: relative;
+}
+.step-number {
+  font-family: var(--serif);
+  font-size: 48px;
+  color: var(--faint);
+  line-height: 1;
+  margin-bottom: 16px;
+}
+.step-item h3 {
+  font-family: var(--sans);
+  font-size: 15px; font-weight: 700;
+  color: var(--h1); margin-bottom: 8px;
+}
+.step-item p {
+  font-size: 13px; color: var(--body); line-height: 1.65;
+}
+
+/* ── Comparison Table ─────────────────────────────────── */
+.compare-section { background: var(--surface); }
+.compare-table {
+  max-width: 860px;
+  margin: 0 auto;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+}
+.compare-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.compare-header-cell {
+  padding: 16px 24px;
+  font-size: 14px; font-weight: 700;
+  text-align: center;
+  font-family: var(--sans);
+}
+.compare-header-cell.old {
+  background: rgba(232,84,84,0.04);
+  color: var(--body);
+  border-bottom: 1px solid rgba(232,84,84,0.08);
+}
+.compare-header-cell.new {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-bottom: 1px solid rgba(61,214,140,0.12);
+}
+.compare-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--divider);
+}
+.compare-row:last-child { border-bottom: none; }
+.compare-cell {
+  padding: 14px 24px;
+  font-size: 14px;
+  text-align: center;
+  line-height: 1.5;
+}
+.compare-cell.old { color: var(--muted); }
+.compare-cell.new { color: var(--h2); font-weight: 500; }
+
+/* ── Workflow (3-step flow) ───────────────────────────── */
+.workflow-cards {
+  display: flex; flex-direction: column; gap: 0;
+  max-width: 680px;
+  margin: 0 auto;
+}
+.workflow-card {
+  display: flex; align-items: flex-start; gap: 20px;
+  padding: 24px 28px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  transition: border-color 0.2s;
+}
+.workflow-card:first-child { border-radius: 14px 14px 0 0; }
+.workflow-card:last-child { border-radius: 0 0 14px 14px; }
+.workflow-card:not(:last-child) { border-bottom: none; }
+.workflow-card:hover { border-color: var(--card-border-hover); }
+
+.workflow-num {
+  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+  background: var(--accent-dim);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: var(--accent);
+  font-family: var(--sans);
+}
+.workflow-card h3 {
+  font-family: var(--sans);
+  font-size: 15px; font-weight: 700;
+  color: var(--h1); margin-bottom: 4px;
+}
+.workflow-card p {
+  font-size: 13px; color: var(--body); line-height: 1.6;
+}
+.workflow-arrow {
+  display: flex; justify-content: center;
+  padding: 6px 0;
+  color: var(--faint);
+}
+
+/* ── Code Sample ──────────────────────────────────────── */
+.code-section { border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider); }
+.code-block-wrapper {
+  max-width: 620px;
+  margin: 0 auto;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.code-block-bar {
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--divider);
+  display: flex; align-items: center; gap: 8px;
+}
+.code-block-bar span {
+  font-size: 11px; color: var(--faint); font-family: var(--mono);
+}
+.code-block {
+  padding: 20px 24px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--body);
+  overflow-x: auto;
+}
+.code-block .cm { color: var(--faint); }
+.code-block .fn { color: var(--h2); }
+.code-block .str { color: var(--accent); opacity: 0.8; }
+
+/* ── Pricing ──────────────────────────────────────────── */
+.pricing-section {
+  position: relative;
+}
+.pricing-section::before {
+  content: '';
+  position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 140%; height: 60%;
+  background: radial-gradient(ellipse 50% 60% at 50% 100%, rgba(61,214,140,0.03) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.pricing-card {
+  max-width: 420px;
+  margin: 0 auto;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  padding: 40px 36px;
+  position: relative;
+  text-align: center;
+}
+.pricing-card::before {
+  content: '';
+  position: absolute; inset: -1px;
+  border-radius: 19px;
+  background: linear-gradient(180deg, rgba(61,214,140,0.1) 0%, rgba(61,214,140,0) 40%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.pricing-badge {
+  display: inline-block;
+  padding: 5px 14px; border-radius: 16px;
+  background: var(--accent-dim);
+  border: 1px solid rgba(61,214,140,0.15);
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 24px;
+}
+
+.pricing-name {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted); margin-bottom: 8px;
+}
+.pricing-amount {
+  font-family: var(--serif);
+  font-size: 64px;
+  color: var(--h1);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.pricing-amount span {
+  font-family: var(--sans);
+  font-size: 16px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.pricing-desc {
+  font-size: 14px;
+  color: var(--body);
+  margin-bottom: 28px;
+}
+
+.pricing-features {
+  list-style: none;
+  text-align: left;
+  margin-bottom: 32px;
+}
+.pricing-features li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--divider);
+  font-size: 14px; color: var(--h2);
+}
+.pricing-features li:last-child { border-bottom: none; }
+.pricing-features li svg {
+  width: 16px; height: 16px; flex-shrink: 0;
+  stroke: var(--accent); fill: none; stroke-width: 2.5;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+
+.pricing-cta {
+  display: block;
+  width: 100%;
+  padding: 15px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #070709;
+  font-size: 15px; font-weight: 700;
+  text-decoration: none;
+  text-align: center;
+  transition: all 0.2s;
+  font-family: var(--sans);
+  border: none; cursor: pointer;
+}
+.pricing-cta:hover { background: #4ee89c; box-shadow: 0 8px 32px rgba(61,214,140,0.25); }
+
+.pricing-note {
+  font-size: 12px; color: var(--muted);
+  margin-top: 14px;
+}
+
+/* ── FAQ ──────────────────────────────────────────────── */
+.faq-list {
+  max-width: 680px;
+  margin: 0 auto;
+}
+.faq-item {
+  border-bottom: 1px solid var(--divider);
+  padding: 20px 0;
+}
+.faq-q {
+  font-size: 15px; font-weight: 600; color: var(--h2);
+  margin-bottom: 8px;
+  cursor: default;
+}
+.faq-a {
+  font-size: 14px; color: var(--body); line-height: 1.7;
+}
+
+/* ── Footer ───────────────────────────────────────────── */
+footer {
+  padding: 40px 0;
+  border-top: 1px solid var(--divider);
+  text-align: center;
+}
+footer p {
+  font-size: 12px; color: var(--faint);
+}
+footer a { color: var(--muted); text-decoration: none; }
+footer a:hover { color: var(--body); }
+
+/* ── Animations ───────────────────────────────────────── */
+.fade-up {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.fade-up.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Responsive ───────────────────────────────────────── */
+@media (max-width: 768px) {
+  .features-grid { grid-template-columns: 1fr; }
+  .pain-grid { grid-template-columns: 1fr; }
+  .steps-row { flex-direction: column; gap: 32px; }
+  .compare-cell, .compare-header-cell { padding: 12px 14px; font-size: 13px; }
+  .hero h1 { font-size: 36px; }
+  section { padding: 72px 0; }
+  nav { padding: 12px 20px; }
+  .container, .container-narrow { padding: 0 20px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ════ Nav ════ -->
+<nav>
+  <a href="#" class="nav-logo">
+    <div class="nav-logo-icon">S</div>
+    <div class="nav-logo-text">Sample<span>Architect</span></div>
+  </a>
+  <a href="#pricing" class="nav-cta">Get SampleArchitect — $99</a>
+</nav>
+
+<!-- ════ Hero ════ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">Desktop App for Mac & Windows</div>
+    <h1>Turn your recordings<br>into <em>playable instruments.</em></h1>
+    <p class="hero-sub">
+      Record samples of any instrument. Name them. Drag them in.<br>
+      SampleArchitect builds a fully mapped, scripted Kontakt instrument<br>
+      you can play in your DAW — in minutes, not days.
+    </p>
+    <div class="hero-actions">
+      <a href="#pricing" class="btn-primary">
+        Get SampleArchitect
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </a>
+      <a href="#how-it-works" class="btn-secondary">See how it works</a>
+    </div>
+    <p class="hero-price">$99 one-time · No subscription · Yours forever</p>
+
+    <div class="hero-preview">
+      <div class="hero-preview-window">
+        <div class="hero-preview-bar">
+          <div class="hero-preview-dot"></div>
+          <div class="hero-preview-dot"></div>
+          <div class="hero-preview-dot"></div>
+          <span>SampleArchitect</span>
+        </div>
+        <div class="hero-preview-body">
+          <div class="preview-placeholder">
+            <div class="preview-play">
+              <svg viewBox="0 0 24 24"><polygon points="8 5 19 12 8 19"/></svg>
+            </div>
+            <div class="preview-label">Watch the Demo</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ Features ════ -->
+<section class="fade-up">
+  <div class="container">
+    <span class="section-label">What it does</span>
+    <h2 class="section-heading">Zero guesswork. One instrument.</h2>
+    <p class="section-sub">SampleArchitect guides you from raw recordings to a finished Kontakt instrument with a simple, focused workflow.</p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
+        </div>
+        <h3>Guided Recording Plan</h3>
+        <p>Tells you exactly which notes to record, at which velocities, with a downloadable folder structure and naming convention. No guesswork.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18m6-18v18M3 9h18M3 15h18"/></svg>
+        </div>
+        <h3>Auto Sample Mapping</h3>
+        <p>Drag in your folder. Every correctly named file is instantly parsed, pitch-detected, and mapped to the right MIDI key with velocity layers.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 20v-6m0 0V4m0 10l-4-3m4 3l4-3"/></svg>
+        </div>
+        <h3>One-Click KSP Export</h3>
+        <p>Generates a complete Kontakt script with mapped zones, velocity splits, round robin cycling, UI knobs, and an effects chain. Ready to paste and play.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ The SampleArchitect Way ════ -->
+<section class="fade-up" id="how-it-works">
+  <div class="container">
+    <span class="section-label">The SampleArchitect Way</span>
+    <h2 class="section-heading">Record. Import. Export. Play.</h2>
+    <p class="solution-italic">All scripting handled. All mapping automatic. All yours.</p>
+
+    <div class="workflow-cards">
+      <div class="workflow-card">
+        <div class="workflow-num">1</div>
+        <div>
+          <h3>Record your samples</h3>
+          <p>Follow the guided recording plan. Name your files with the simple convention. SampleArchitect even generates a downloadable folder template so you know exactly what to record before you start.</p>
+        </div>
+      </div>
+      <div class="workflow-card">
+        <div class="workflow-num">2</div>
+        <div>
+          <h3>Drag in your folder</h3>
+          <p>Drop your samples folder into SampleArchitect. Every file is instantly parsed, validated, and mapped to the correct MIDI note, velocity layer, and round robin group. See the full keyboard map light up in real time.</p>
+        </div>
+      </div>
+      <div class="workflow-card">
+        <div class="workflow-num">3</div>
+        <div>
+          <h3>Configure your controls</h3>
+          <p>Toggle on the knobs you want — Volume, Attack, Release, Filter, Reverb — and preview exactly how your instrument will look and behave in Kontakt. No scripting, just switches.</p>
+        </div>
+      </div>
+      <div class="workflow-card">
+        <div class="workflow-num">4</div>
+        <div>
+          <h3>Export and play</h3>
+          <p>One click generates a complete KSP script, organized sample folders, and a step-by-step loading guide. Open Kontakt, paste the script, and your instrument is ready to record with.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ Naming Convention ════ -->
+<section class="code-section fade-up">
+  <div class="container-narrow">
+    <span class="section-label">The Convention</span>
+    <h2 class="section-heading">One naming pattern.<br>Everything else is automatic.</h2>
+    <p class="section-sub">Name your files. SampleArchitect handles the rest — parsing, mapping, velocity splits, round robin grouping, and KSP generation. All from the filename.</p>
+
+    <div class="code-block-wrapper">
+      <div class="code-block-bar">
+        <span>filename convention</span>
+      </div>
+      <div class="code-block">
+<span class="cm">// Pattern</span>
+<span class="fn">[Instrument]</span>_<span class="fn">[Articulation]</span>_<span class="fn">[Note][Octave]</span>_v<span class="fn">[Velocity]</span>_rr<span class="fn">[RoundRobin]</span>.wav
+
+<span class="cm">// Examples</span>
+<span class="str">Kantele_Plucked_C3_v1_rr1.wav</span>
+<span class="str">Kantele_Plucked_C3_v2_rr1.wav</span>     <span class="cm">← second velocity layer</span>
+<span class="str">Kantele_Plucked_C3_v1_rr2.wav</span>     <span class="cm">← second round robin</span>
+<span class="str">Kantele_Strummed_E4_v1_rr1.wav</span>    <span class="cm">← different articulation</span>
+<span class="str">Piano_Sustain_Bb2_v3_rr2.wav</span>      <span class="cm">← flats use 'b', sharps use 's'</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ Comparison ════ -->
+<section class="compare-section fade-up">
+  <div class="container">
+    <span class="section-label">The Shift</span>
+    <h2 class="section-heading">Manual scripting vs. SampleArchitect</h2>
+    <p class="section-sub"></p>
+
+    <div class="compare-table">
+      <div class="compare-header">
+        <div class="compare-header-cell old">The Old Way</div>
+        <div class="compare-header-cell new">With SampleArchitect</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell old">Write KSP scripts by hand for every instrument</div>
+        <div class="compare-cell new">Auto-generated scripts from your sample map</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell old">Manually calculate MIDI note numbers and velocity splits</div>
+        <div class="compare-cell new">Parsed from filenames — zero math</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell old">Debug zone parameter errors in Kontakt's script editor</div>
+        <div class="compare-cell new">Visual keyboard map confirms every mapping</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell old">Copy-paste KSP snippets from forums and tutorials</div>
+        <div class="compare-cell new">Toggle controls on/off — the script writes itself</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell old">Organize samples into folders manually</div>
+        <div class="compare-cell new">Exported in clean structure by articulation</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell old">"Does this work? Let me re-apply the script..."</div>
+        <div class="compare-cell new">Paste, apply, play. First try.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ Pricing ════ -->
+<section class="pricing-section fade-up" id="pricing">
+  <div class="container">
+    <span class="section-label">Simple pricing</span>
+    <h2 class="section-heading">Pay once. Build instruments forever.</h2>
+    <p class="section-sub"></p>
+
+    <div class="pricing-card">
+      <div class="pricing-badge">One-Time Purchase</div>
+      <div class="pricing-name">SampleArchitect</div>
+      <div class="pricing-amount">$99<span> / once</span></div>
+      <p class="pricing-desc">Everything you need to turn recordings into instruments.</p>
+
+      <ul class="pricing-features">
+        <li>
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Guided recording plan with folder templates
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Auto sample parsing and MIDI mapping
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Visual keyboard mapper with status indicators
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Configurable controls: Volume, Pan, Attack, Filter & more
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Complete KSP script generation for Kontakt 6+
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          FX chain: Filter, EQ, Reverb, Delay
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Organized export with setup guide
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          All future updates included
+        </li>
+      </ul>
+
+      <a href="#" class="pricing-cta">Get SampleArchitect — $99</a>
+      <p class="pricing-note">Mac & Windows · Kontakt 6+ · No subscription</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════ FAQ ════ -->
+<section class="fade-up">
+  <div class="container">
+    <span class="section-label">Questions</span>
+    <h2 class="section-heading">Frequently asked</h2>
+    <p class="section-sub"></p>
+
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="faq-q">Which version of Kontakt do I need?</div>
+        <div class="faq-a">SampleArchitect generates scripts compatible with Kontakt 6 and newer, including Kontakt 7. The free Kontakt Player is not supported — you need the full version of Kontakt.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Do my samples leave my computer?</div>
+        <div class="faq-a">Never. SampleArchitect is a desktop app. All processing happens locally on your machine. No cloud, no uploads, no accounts. Your samples stay yours.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">What sample format does it accept?</div>
+        <div class="faq-a">WAV files at any sample rate and bit depth. 44.1kHz / 24-bit is the recommended minimum for quality Kontakt instruments.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Do I need to know KSP scripting?</div>
+        <div class="faq-a">No. That's the whole point. SampleArchitect generates the complete KSP script for you — zone mapping, velocity layers, round robin cycling, UI controls, and effects chain. You just paste it into Kontakt.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">What about Decent Sampler, SFZ, or other formats?</div>
+        <div class="faq-a">Decent Sampler export is coming in a future update. The initial release focuses on Kontakt, which is the industry standard for professional sample libraries. All future format exports will be free updates.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Is there a subscription?</div>
+        <div class="faq-a">No. $99 once, yours forever. All future updates are included. We don't do subscriptions for creative tools — you bought it, you own it.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ Final CTA ════ -->
+<section style="padding: 80px 0 100px; text-align: center;">
+  <div class="container">
+    <h2 class="section-heading" style="margin-bottom: 16px;">Build your first instrument today.</h2>
+    <p style="font-size: 15px; color: var(--body); margin-bottom: 32px;">Record it. Name it. Drag it in. Play it.</p>
+    <a href="#pricing" class="btn-primary" style="font-size: 16px; padding: 16px 40px;">
+      Get SampleArchitect — $99
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </a>
+  </div>
+</section>
+
+<!-- ════ Footer ════ -->
+<footer>
+  <div class="container">
+    <p>SampleArchitect · Built by <a href="https://evenant.com">Evenant</a> · Kontakt 6+ compatible</p>
+  </div>
+</footer>
+
+<!-- ════ Scroll Animation ════ -->
+<script>
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
