@@ -7,7 +7,8 @@ var state = {
   samples: [],
   selectedSampleIndex: -1,
   instrumentName: 'My Instrument',
-  outputPath: null
+  outputPath: null,
+  recordingPlan: null
 };
 
 // ── Phase Navigation ──
@@ -119,14 +120,18 @@ async function handleFileDrop(dirPath) {
 
     if (state.samples.length === 0) return;
 
-    // Auto-detect instrument name from first parsed sample or parent folder
-    var firstMatched = state.samples.find(function(s) { return s.parsed; });
-    if (firstMatched && firstMatched.instrument) {
-      state.instrumentName = firstMatched.instrument;
+    // Auto-detect instrument name: recording plan > first parsed sample > folder name
+    if (state.recordingPlan && state.recordingPlan.instrument) {
+      state.instrumentName = state.recordingPlan.instrument;
     } else {
-      // Fall back to parent folder name
-      var parts = dirPath.replace(/\\/g, '/').replace(/\/$/, '').split('/');
-      state.instrumentName = parts[parts.length - 1] || 'My Instrument';
+      var firstMatched = state.samples.find(function(s) { return s.parsed; });
+      if (firstMatched && firstMatched.instrument) {
+        state.instrumentName = firstMatched.instrument;
+      } else {
+        // Fall back to parent folder name
+        var parts = dirPath.replace(/\\/g, '/').replace(/\/$/, '').split('/');
+        state.instrumentName = parts[parts.length - 1] || 'My Instrument';
+      }
     }
     document.getElementById('projectName').textContent = state.instrumentName + ' Project';
 
@@ -574,6 +579,7 @@ function renderPhase3() {
   renderFxChain();
   renderControlToggles();
   renderEffectToggles();
+  renderFormatToggles();
 }
 
 function renderKnobGrid() {
@@ -706,6 +712,37 @@ function renderControlToggles() {
   });
 }
 
+function renderFormatToggles() {
+  var panel = document.getElementById('formatPanel');
+  panel.innerHTML = '';
+
+  Object.keys(templateConfig.exportFormats).forEach(function(key) {
+    var fmt = templateConfig.exportFormats[key];
+    var toggle = document.createElement('div');
+    toggle.className = 'effect-toggle';
+
+    var checkbox = document.createElement('div');
+    checkbox.className = 'toggle-checkbox' + (fmt.enabled ? ' checked' : '');
+
+    var info = document.createElement('div');
+    info.className = 'effect-info';
+    info.innerHTML = '<div class="effect-name">' + fmt.label + '</div>' +
+                     '<div class="effect-desc">' + fmt.description + '</div>';
+
+    toggle.appendChild(checkbox);
+    toggle.appendChild(info);
+
+    toggle.addEventListener('click', function() {
+      var toggled = toggleExportFormat(key);
+      if (toggled) {
+        checkbox.classList.toggle('checked');
+      }
+    });
+
+    panel.appendChild(toggle);
+  });
+}
+
 function renderEffectToggles() {
   var panel = document.getElementById('effectsPanel');
   panel.innerHTML = '';
@@ -739,6 +776,7 @@ function renderEffectToggles() {
 // ── Phase 4 ──
 function renderPhase4() {
   var stats = getSampleStats(state.samples);
+  var formats = getEnabledFormats();
 
   var grid = document.getElementById('summaryGrid');
   grid.innerHTML =
@@ -748,6 +786,24 @@ function renderPhase4() {
     '<div class="summary-cell"><span class="label">VEL LAYERS</span><div class="value">' + stats.maxVelocityLayers + '</div></div>' +
     '<div class="summary-cell"><span class="label">ROUND ROBINS</span><div class="value">' + stats.maxRoundRobins + '</div></div>' +
     '<div class="summary-cell"><span class="label">TEMPLATE</span><div class="value">Chromatic</div></div>';
+
+  // Render output formats
+  var outputEl = document.getElementById('outputFormats');
+  var html = '';
+  if (formats.indexOf('kontakt') !== -1) {
+    html += '<div class="output-row">' +
+      '<div class="output-info"><span class="output-format">Kontakt 6+</span>' +
+      '<span class="output-desc">KSP script + resource container</span></div>' +
+      '<span class="output-badge">.txt</span></div>';
+  }
+  if (formats.indexOf('decentsampler') !== -1) {
+    if (html) html += '<div style="border-top:1px solid var(--divider);margin:10px 0;"></div>';
+    html += '<div class="output-row">' +
+      '<div class="output-info"><span class="output-format">Decent Sampler</span>' +
+      '<span class="output-desc">Ready-to-play .dspreset \u2014 zero manual steps</span></div>' +
+      '<span class="output-badge">.dspreset</span></div>';
+  }
+  outputEl.innerHTML = html;
 }
 
 async function doBuild() {
@@ -796,6 +852,34 @@ document.addEventListener('DOMContentLoaded', function() {
       goToPhase(step);
     });
   });
+
+  // Settings modal
+  document.getElementById('btnSettings').addEventListener('click', openSettingsModal);
+  document.getElementById('settingsClose').addEventListener('click', closeSettingsModal);
+  document.getElementById('settingsCancelBtn').addEventListener('click', closeSettingsModal);
+  document.getElementById('settingsSaveBtn').addEventListener('click', saveSettings);
+  document.getElementById('settingsToggleKey').addEventListener('click', toggleApiKeyVisibility);
+  document.getElementById('settingsTestKey').addEventListener('click', testApiKey);
+
+  // Phase 1 chat
+  document.getElementById('btnChatSend').addEventListener('click', function() {
+    var input = document.getElementById('chatInput');
+    var msg = input.value.trim();
+    if (msg) {
+      input.value = '';
+      sendChatMessage(msg);
+    }
+  });
+  document.getElementById('chatInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      document.getElementById('btnChatSend').click();
+    }
+  });
+
+  // Phase 1 — decide layout based on API key
+  updatePhase1Layout();
+  renderChatMessages();
 
   // Phase 1
   initPhase1();
@@ -849,6 +933,11 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Clipboard copy failed:', err);
         btn.textContent = 'Copy failed';
       });
+    } else {
+      btn.textContent = 'No KSP generated';
+      setTimeout(function() {
+        btn.textContent = 'Copy Script to Clipboard';
+      }, 2000);
     }
   });
 

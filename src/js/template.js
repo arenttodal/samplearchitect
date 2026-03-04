@@ -2,6 +2,10 @@
 /* default values are 0-100 percentages for UI knob preview display */
 
 var templateConfig = {
+  exportFormats: {
+    kontakt:       { label: 'Kontakt 6+',       description: 'KSP script + resource container', enabled: true },
+    decentsampler: { label: 'Decent Sampler',    description: 'Free — .dspreset, zero manual steps', enabled: true }
+  },
   controls: {
     volume:    { label: 'Volume',  enabled: true, default: 75 },
     pan:       { label: 'Pan',     enabled: true, default: 50 },
@@ -19,6 +23,26 @@ var templateConfig = {
     delay:  { label: 'Delay',   description: 'Tempo-synced',      enabled: true  }
   }
 };
+
+function toggleExportFormat(key) {
+  // Don't allow disabling both formats
+  var other = key === 'kontakt' ? 'decentsampler' : 'kontakt';
+  if (!templateConfig.exportFormats[other].enabled && templateConfig.exportFormats[key].enabled) {
+    return false; // Would leave no format enabled
+  }
+  templateConfig.exportFormats[key].enabled = !templateConfig.exportFormats[key].enabled;
+  return true;
+}
+
+function getEnabledFormats() {
+  var result = [];
+  Object.keys(templateConfig.exportFormats).forEach(function(key) {
+    if (templateConfig.exportFormats[key].enabled) {
+      result.push(key);
+    }
+  });
+  return result;
+}
 
 function toggleControl(key) {
   templateConfig.controls[key].enabled = !templateConfig.controls[key].enabled;
