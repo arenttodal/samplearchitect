@@ -1,21 +1,22 @@
 /* template.js — Template configuration state */
+/* default values are 0-100 percentages for UI knob preview display */
 
 var templateConfig = {
   controls: {
-    volume:    { label: 'Volume',    enabled: true,  default: 75, kspParam: 'ENGINE_PAR_VOLUME',    min: 0, max: 1000000 },
-    pan:       { label: 'Pan',       enabled: true,  default: 50, kspParam: 'ENGINE_PAR_PAN',       min: -1000, max: 1000 },
-    attack:    { label: 'Attack',    enabled: true,  default: 10, kspParam: 'ENGINE_PAR_ATTACK',    min: 0, max: 1000000 },
-    release:   { label: 'Release',   enabled: true,  default: 35, kspParam: 'ENGINE_PAR_RELEASE',   min: 0, max: 1000000 },
-    tune:      { label: 'Tune',      enabled: true,  default: 50, kspParam: 'ENGINE_PAR_TUNE',      min: -36000, max: 36000 },
-    cutoff:    { label: 'Cutoff',    enabled: true,  default: 80, kspParam: 'ENGINE_PAR_CUTOFF',    min: 0, max: 1000000 },
-    resonance: { label: 'Res',       enabled: true,  default: 20, kspParam: 'ENGINE_PAR_RESONANCE', min: 0, max: 1000000 },
-    reverb:    { label: 'Reverb',    enabled: true,  default: 30, kspParam: 'ENGINE_PAR_SEND_EFFECT_0_LEVEL', min: 0, max: 1000000 }
+    volume:    { label: 'Volume',  enabled: true, default: 75 },
+    pan:       { label: 'Pan',     enabled: true, default: 50 },
+    attack:    { label: 'Attack',  enabled: true, default: 0  },
+    release:   { label: 'Release', enabled: true, default: 35 },
+    tune:      { label: 'Tune',    enabled: true, default: 50 },
+    cutoff:    { label: 'Cutoff',  enabled: true, default: 80 },
+    resonance: { label: 'Res',     enabled: true, default: 20 },
+    reverb:    { label: 'Reverb',  enabled: true, default: 30 }
   },
   effects: {
-    filter: { label: 'Filter',  description: 'LP / HP / BP',      enabled: true, kspType: 'EFFECT_TYPE_FILTER' },
-    eq:     { label: 'EQ',      description: '2-band parametric',  enabled: true, kspType: 'EFFECT_TYPE_PARA_EQ' },
-    reverb: { label: 'Reverb',  description: 'Algorithmic',        enabled: true, kspType: 'EFFECT_TYPE_REVERB' },
-    delay:  { label: 'Delay',   description: 'Tempo-synced',       enabled: true, kspType: 'EFFECT_TYPE_DELAY' }
+    filter: { label: 'Filter',  description: 'LP / HP / BP',     enabled: true  },
+    eq:     { label: 'EQ',      description: '2-band parametric', enabled: false },
+    reverb: { label: 'Reverb',  description: 'Algorithmic',       enabled: true  },
+    delay:  { label: 'Delay',   description: 'Tempo-synced',      enabled: true  }
   }
 };
 
@@ -45,20 +46,4 @@ function getEnabledEffects() {
     }
   });
   return result;
-}
-
-function scaleDefault(key) {
-  var ctrl = templateConfig.controls[key];
-  if (!ctrl) return 0;
-  var val = ctrl.default;
-  if (key === 'pan') {
-    // Pan: 0-100 user → -1000..1000 KSP, default 50 = 0
-    return Math.round((val / 100) * 2000 - 1000);
-  }
-  if (key === 'tune') {
-    // Tune: 0-100 user → -36000..36000, default 50 = 0
-    return Math.round((val / 100) * 72000 - 36000);
-  }
-  // All others: 0-100 → 0-1000000
-  return Math.round((val / 100) * 1000000);
 }
