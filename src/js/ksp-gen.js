@@ -17,6 +17,13 @@ var KNOB_VAR_NAMES = {
   reverb: 'Reverb'
 };
 
+/* Convert ARGB hex color to signed 32-bit decimal for KSP */
+function colorToKSP(hex) {
+  return hex > 0x7FFFFFFF ? hex - 0x100000000 : hex;
+}
+
+var UI_COLOR_DARK = colorToKSP(0xFF0A0A0B); // -16119285
+
 var KNOB_DEFAULTS = {
   volume:    { value: 750000, label: 'Vol' },
   pan:       { value: 500000, label: 'Pan' },
@@ -58,7 +65,7 @@ function generateKSP(samples, stats, config) {
   lines.push('  set_script_title("' + instrumentName + ' - SampleArchitect")');
   lines.push('  message("")');
   lines.push('  set_ui_height_px(' + uiHeight + ')');
-  lines.push('  set_ui_color(ff0a0a0bh)');
+  lines.push('  set_ui_color(' + UI_COLOR_DARK + ')');
 
   // Title label
   lines.push('');
