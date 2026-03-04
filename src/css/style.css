@@ -981,6 +981,58 @@ code, .code-block {
   margin-top: 2px;
 }
 
+/* Knob Style Picker */
+.knob-style-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.knob-style-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.knob-style-option:hover {
+  background: var(--hover);
+}
+
+.knob-style-option.selected {
+  border-color: rgba(255,255,255,0.1);
+  background: var(--press);
+}
+
+.knob-style-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.knob-style-gray { background: #555; }
+.knob-style-green { background: var(--ok); }
+.knob-style-ice { background: #5ba8d4; }
+
+.knob-style-info { flex: 1; }
+
+.knob-style-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--h2);
+}
+
+.knob-style-desc {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
 /* Phase 3 footer */
 .phase3-footer {
   display: flex;

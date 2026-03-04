@@ -98,7 +98,7 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
   // Stage 5: Generate resource container assets (wallpaper + knob skin)
   onProgress(4, stages[4]);
 
-  var wallpaperBytes = await generateWallpaper(instrumentName, mapped.length, getEnabledControls());
+  var wallpaperBytes = await generateWallpaper(instrumentName, mapped.length);
   await window.__TAURI__.core.invoke('write_file_bytes', {
     path: basePath + '/Resources/pictures/wallpaper.png',
     bytes: Array.from(wallpaperBytes)
@@ -110,12 +110,13 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     contents: generatePictureTxt(0)
   });
 
-  var knobBytes = getKnobPngBytes();
+  var knobStyle = config.knobStyle || 'gray';
+  var knobBytes = getKnobPngBytes(knobStyle);
   await window.__TAURI__.core.invoke('write_file_bytes', {
     path: basePath + '/Resources/pictures/knob.png',
     bytes: Array.from(knobBytes)
   });
-  console.log('[SampleArchitect] knob.png written (' + knobBytes.length + ' bytes, static asset) to ' + basePath + '/Resources/pictures/knob.png');
+  console.log('[SampleArchitect] knob.png written (' + knobBytes.length + ' bytes, style=' + knobStyle + ') to ' + basePath + '/Resources/pictures/knob.png');
 
   await window.__TAURI__.core.invoke('write_text_file', {
     path: basePath + '/Resources/pictures/knob.txt',
