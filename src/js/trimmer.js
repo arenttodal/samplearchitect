@@ -5,7 +5,7 @@
  * Returns sample indices for trim start and end.
  */
 function findTrimPoints(audioBuffer, thresholdDb) {
-  if (thresholdDb === undefined) thresholdDb = -60;
+  if (thresholdDb === undefined) thresholdDb = -40;
 
   var data = audioBuffer.getChannelData(0);
   var threshold = Math.pow(10, thresholdDb / 20);
@@ -15,8 +15,8 @@ function findTrimPoints(audioBuffer, thresholdDb) {
   var trimStart = 0;
   for (var i = 0; i < data.length; i++) {
     if (Math.abs(data[i]) > threshold) {
-      // Leave 1ms pre-roll to preserve attack transient
-      trimStart = Math.max(0, i - Math.floor(sampleRate * 0.001));
+      // Leave 50ms pre-roll to preserve full attack transient
+      trimStart = Math.max(0, i - Math.floor(sampleRate * 0.05));
       break;
     }
   }
