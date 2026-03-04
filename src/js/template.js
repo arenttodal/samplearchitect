@@ -2,7 +2,6 @@
 /* default values are 0-100 percentages for UI knob preview display */
 
 var templateConfig = {
-  knobStyle: 'gray',
   controls: {
     volume:    { label: 'Volume',  enabled: true, default: 75 },
     pan:       { label: 'Pan',     enabled: true, default: 50 },

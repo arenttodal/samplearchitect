@@ -110,14 +110,13 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     contents: generatePictureTxt(0)
   });
 
-  var knobStyle = config.knobStyle || 'gray';
-  console.log('Copying knob asset: knob_' + knobStyle + '.png');
-  var knobBytes = getKnobPngBytes(knobStyle);
+  console.log('Copying knob asset: knob_gray.png');
+  var knobBytes = getKnobPngBytes();
   await window.__TAURI__.core.invoke('write_file_bytes', {
     path: basePath + '/Resources/pictures/knob.png',
     bytes: Array.from(knobBytes)
   });
-  console.log('[SampleArchitect] knob.png written (' + knobBytes.length + ' bytes, style=' + knobStyle + ') to ' + basePath + '/Resources/pictures/knob.png');
+  console.log('[SampleArchitect] knob.png written (' + knobBytes.length + ' bytes) to ' + basePath + '/Resources/pictures/knob.png');
 
   await window.__TAURI__.core.invoke('write_text_file', {
     path: basePath + '/Resources/pictures/knob.txt',
