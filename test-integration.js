@@ -218,15 +218,15 @@ const posYMatches = (ksp.match(/\$CONTROL_PAR_POS_Y/g) || []).length;
 assert('8 POS_X (8 knobs, no title)', posXMatches === 8);
 assert('8 POS_Y (8 knobs, no title)', posYMatches === 8);
 
-// V1.1b: Always 330px height
-assert('330px height always', ksp.includes('set_ui_height_px(330)'));
+// V1.1b: 500px height for 2 rows (8 knobs), 400px for 1 row
+assert('500px height for 2 rows', ksp.includes('set_ui_height_px(500)'));
 
-// V1.1b: Knob positions (Y=60 for row 1, Y=160 for row 2, spacing=75)
+// V1.1b: Knob positions (Y=190 for row 1, Y=280 for row 2, spacing=75)
 assert('Volume at X=20',   ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_X, 20'));
-assert('Volume at Y=60',   ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_Y, 60'));
+assert('Volume at Y=190',  ksp.includes('get_ui_id($Volume), $CONTROL_PAR_POS_Y, 190'));
 assert('Pan at X=95',      ksp.includes('get_ui_id($Pan), $CONTROL_PAR_POS_X, 95'));
 assert('Attack at X=170',  ksp.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 170'));
-assert('Reverb at Y=160',  ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_Y, 160'));
+assert('Reverb at Y=280',  ksp.includes('get_ui_id($Reverb), $CONTROL_PAR_POS_Y, 280'));
 
 // ── Test 17: GUI Skin — Verify layout with fewer knobs (V1.1b) ──
 console.log('\n=== Test 17: GUI Skin (Fewer Knobs V1.1b) ===');
@@ -246,7 +246,7 @@ context.templateConfig.controls.attack.enabled = true;
 context.templateConfig.controls.release.enabled = true;
 
 const ksp4 = vm.runInContext('generateKSP(samples, stats, templateConfig)', context);
-assert('4 knobs: still 330px height', ksp4.includes('set_ui_height_px(330)'));
+assert('4 knobs: 400px height for 1 row', ksp4.includes('set_ui_height_px(400)'));
 const posX4 = (ksp4.match(/\$CONTROL_PAR_POS_X/g) || []).length;
 assert('4 knobs: 4 POS_X (no title)', posX4 === 4);
 assert('4 knobs: Attack at X=170', ksp4.includes('get_ui_id($Attack), $CONTROL_PAR_POS_X, 170'));

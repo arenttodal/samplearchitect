@@ -1,4 +1,5 @@
-/* wallpaper-gen.js — Generate Kontakt wallpaper PNG (633x330) */
+/* wallpaper-gen.js — Generate Kontakt wallpaper PNG (633x500) */
+/* Top ~130px is behind Kontakt's instrument header — keep clean. */
 
 /**
  * Generate a dark wallpaper PNG for Kontakt's resource container.
@@ -10,7 +11,7 @@
  */
 async function generateWallpaper(instrumentName, sampleCount) {
   var width = 633;
-  var height = 330;
+  var height = 500;
 
   var canvas;
   if (typeof OffscreenCanvas !== 'undefined') {
@@ -30,34 +31,34 @@ async function generateWallpaper(instrumentName, sampleCount) {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, width, height);
 
-  // Subtle horizontal separator line at y=32
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, 32);
-  ctx.lineTo(width, 32);
-  ctx.stroke();
-
-  // Instrument name — top left
+  // Instrument name — below header area (Y=140)
   ctx.fillStyle = '#ededf0';
   ctx.font = '600 20px Inter, Arial, sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(instrumentName, 20, 16);
+  ctx.fillText(instrumentName, 20, 140);
 
-  // "SAMPLEARCHITECT" watermark — top right
+  // "SAMPLEARCHITECT" watermark — right side, same row (Y=148)
   ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
   ctx.font = '600 8px Inter, Arial, sans-serif';
   ctx.textAlign = 'right';
   ctx.letterSpacing = '0.14em';
-  ctx.fillText('SAMPLEARCHITECT', width - 16, 16);
+  ctx.fillText('SAMPLEARCHITECT', width - 16, 148);
   ctx.letterSpacing = '0';
 
-  // Sample count — bottom left
+  // Subtle horizontal separator line at Y=170
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, 170);
+  ctx.lineTo(width, 170);
+  ctx.stroke();
+
+  // Sample count — just below separator (Y=178)
   ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
   ctx.font = '400 9px Inter, Arial, sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText(sampleCount + ' samples', 20, height - 12);
+  ctx.fillText(sampleCount + ' samples', 20, 178);
 
   // Export to PNG
   var blob;

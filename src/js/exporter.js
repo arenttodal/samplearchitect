@@ -77,12 +77,14 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     path: basePath + '/Resources/pictures/wallpaper.png',
     bytes: Array.from(wallpaperBytes)
   });
+  console.log('[SampleArchitect] wallpaper.png written (' + wallpaperBytes.length + ' bytes) to ' + basePath + '/Resources/pictures/wallpaper.png');
 
   var knobBytes = await generateKnobStrip();
   await window.__TAURI__.core.invoke('write_file_bytes', {
     path: basePath + '/Resources/pictures/sa_knob.png',
     bytes: Array.from(knobBytes)
   });
+  console.log('[SampleArchitect] sa_knob.png written (' + knobBytes.length + ' bytes) to ' + basePath + '/Resources/pictures/sa_knob.png');
 
   // Stage 6-7: Generate and write KSP script as .txt
   onProgress(5, stages[5]);
@@ -201,7 +203,7 @@ function generateSetupGuide(samples, stats, config, outputPath, instrumentName) 
     '',
     '  Resources/',
     '  ├── pictures/',
-    '  │   ├── wallpaper.png    (633×330 instrument background)',
+    '  │   ├── wallpaper.png    (633×500 instrument background)',
     '  │   └── sa_knob.png      (128-frame knob strip)',
     '  └── scripts/',
     '      └── ' + instrumentName + '_script.txt',
