@@ -1,15 +1,14 @@
-/* trimmer.js — Auto-trim leading/trailing silence from WAV samples */
+/* trimmer.js — Trim leading silence from WAV samples */
 
 /**
  * Find trim points in a decoded AudioBuffer.
- * Returns sample indices for trim start and end.
+ * Only trims leading silence — the tail is never touched.
  */
 function findTrimPoints(audioBuffer, thresholdDb) {
   if (thresholdDb === undefined) thresholdDb = -40;
 
   var data = audioBuffer.getChannelData(0);
   var startThreshold = Math.pow(10, thresholdDb / 20);    // -40dB for attack detection
-  var endThreshold = Math.pow(10, -70 / 20);              // -70dB for tail detection
   var sampleRate = audioBuffer.sampleRate;
 
   // Find first sample above start threshold
@@ -22,19 +21,11 @@ function findTrimPoints(audioBuffer, thresholdDb) {
     }
   }
 
-  // Find last sample above end threshold (only trims true digital silence)
+  // End is always the full sample length — never trim tails
   var trimEnd = data.length;
-  for (var j = data.length - 1; j >= 0; j--) {
-    if (Math.abs(data[j]) > endThreshold) {
-      // Leave 200ms tail to preserve natural decay
-      trimEnd = Math.min(data.length, j + Math.floor(sampleRate * 0.2));
-      break;
-    }
-  }
 
   var originalDuration = data.length / sampleRate;
-  var trimmedDuration = (trimEnd - trimStart) / sampleRate;
-  var silenceRemoved = originalDuration - trimmedDuration;
+  var silenceRemoved = trimStart / sampleRate;
 
   return {
     startSample: trimStart,
@@ -42,7 +33,7 @@ function findTrimPoints(audioBuffer, thresholdDb) {
     startTime: trimStart / sampleRate,
     endTime: trimEnd / sampleRate,
     originalDuration: originalDuration,
-    trimmedDuration: trimmedDuration,
+    trimmedDuration: originalDuration - silenceRemoved,
     silenceRemoved: silenceRemoved,
     significant: silenceRemoved > 0.5
   };

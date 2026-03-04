@@ -198,17 +198,14 @@ function renderTrimConfirm(index) {
   if (!s || s.silenceRemoved == null) return;
 
   var removed = s.silenceRemoved.toFixed(2);
-  var origDur = (s.trimEnd != null && s.trimStart != null) ?
-    ((s.trimEndSample + (s.trimEnd - s.trimStart > 0 ? 0 : 0)) / 1) : 0;
 
   container.innerHTML =
     '<div class="inner-panel">' +
     '<span class="label-lg" style="display:block;margin-bottom:12px;">TRIM PREVIEW</span>' +
     '<div class="trim-preview-info">' +
     '<div class="detail-grid">' +
-    '<div class="detail-item"><span class="label">SILENCE REMOVED</span><div class="value">' + removed + 's</div></div>' +
-    '<div class="detail-item"><span class="label">TRIM START</span><div class="value">' + s.trimStart.toFixed(3) + 's</div></div>' +
-    '<div class="detail-item"><span class="label">TRIM END</span><div class="value">' + s.trimEnd.toFixed(3) + 's</div></div>' +
+    '<div class="detail-item"><span class="label">LEADING SILENCE</span><div class="value">' + removed + 's</div></div>' +
+    '<div class="detail-item"><span class="label">AUDIO STARTS AT</span><div class="value">' + s.trimStart.toFixed(3) + 's</div></div>' +
     '<div class="detail-item"><span class="label">STATUS</span><div class="value">' + (s.silenceRemoved > 0.01 ? 'Trimmable' : 'Clean') + '</div></div>' +
     '</div>' +
     '</div>' +
