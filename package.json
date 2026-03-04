@@ -1,0 +1,22 @@
+{
+  "name": "samplearchitect",
+  "version": "1.0.0",
+  "description": "AI-powered sample instrument builder. Drag in your WAV samples, configure controls, export a playable Kontakt instrument.",
+  "main": "index.js",
+  "scripts": {
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:16011/git/arenttodal/samplearchitect"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/cli": "^2.10.0"
+  }
+}

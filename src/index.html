@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SampleArchitect</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ── Top Bar ── -->
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <div class="logo-badge">S</div>
+        <span class="app-title">SampleArchitect</span>
+      </div>
+      <div class="top-bar-center">
+        <div class="step-nav" id="stepNav">
+          <button class="step-btn active" data-step="1">
+            <span class="step-num">1</span> Concept
+          </button>
+          <button class="step-btn disabled" data-step="2">
+            <span class="step-num">2</span> Samples
+          </button>
+          <button class="step-btn disabled" data-step="3">
+            <span class="step-num">3</span> Template
+          </button>
+          <button class="step-btn disabled" data-step="4">
+            <span class="step-num">4</span> Export
+          </button>
+        </div>
+      </div>
+      <div class="top-bar-right" id="projectName">New Project</div>
+    </div>
+
+    <!-- ── Content ── -->
+    <div class="content">
+
+      <!-- Phase 1: Getting Started -->
+      <div class="phase active" id="phase1">
+        <div class="card guide-card">
+          <div class="guide-content">
+
+            <div class="guide-section">
+              <h2>Naming Convention</h2>
+              <p>Name your WAV samples using this pattern so SampleArchitect can automatically parse them:</p>
+              <div class="code-block">[Instrument]_[Articulation]_[Note][Octave]_v[Velocity]_rr[RoundRobin].wav</div>
+              <h3>Examples</h3>
+              <div class="code-block">Kantele_Plucked_C3_v1_rr1.wav
+Kantele_Plucked_Cs3_v2_rr1.wav     (C# = Cs)
+Piano_Sustain_Bb2_v3_rr2.wav       (Bb = Bb)
+Guitar_Fingerpick_A3_v1_rr1.wav</div>
+              <p>Use <span class="code-inline">s</span> for sharp and <span class="code-inline">b</span> for flat — avoid <span class="code-inline">#</span> in filenames.</p>
+            </div>
+
+            <div class="guide-section">
+              <h2>Folder Structure</h2>
+              <p>Organize your samples by articulation for clarity:</p>
+              <div class="code-block">MySamples/
+├── Plucked/
+│   ├── Kantele_Plucked_C3_v1_rr1.wav
+│   └── Kantele_Plucked_E3_v1_rr1.wav
+├── Strummed/
+│   └── Kantele_Strummed_C3_v1_rr1.wav
+└── Harmonics/
+    └── Kantele_Harmonics_G4_v1_rr1.wav</div>
+            </div>
+
+            <div class="guide-section">
+              <h2>Recording Tips</h2>
+              <ul>
+                <li>Keep a consistent microphone position throughout the session</li>
+                <li>Leave 0.5 seconds of silence before each sample</li>
+                <li>Record at 44.1 kHz / 24-bit minimum</li>
+                <li>Avoid clipping — aim for peaks around -6 dB</li>
+                <li>Record multiple velocity layers for more expression</li>
+                <li>Record round robins (multiple takes of the same note) for realism</li>
+              </ul>
+            </div>
+
+          </div>
+          <div class="guide-footer">
+            <button class="btn-secondary" id="btnDownloadTemplate">Download Template Folders</button>
+            <button class="btn-primary large" id="btnReady">I'm Ready — Import Samples</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 2: Sample Import & Mapping -->
+      <div class="phase" id="phase2">
+        <!-- File list (left) -->
+        <div class="card file-list-panel">
+          <div class="file-list-header">
+            <h3>Samples</h3>
+            <div class="file-list-badges" id="fileBadges"></div>
+          </div>
+          <div class="validation-warning hidden" id="validationWarning"></div>
+          <div class="file-list-scroll" id="fileListScroll"></div>
+        </div>
+
+        <!-- Right panel -->
+        <div class="right-panel">
+          <!-- Drop zone -->
+          <div class="drop-zone" id="dropZone">
+            <div class="drop-zone-icon">&#8615;</div>
+            <h3>Drop a sample folder here</h3>
+            <p>Drag a folder containing your named .wav files</p>
+          </div>
+
+          <!-- Keyboard mapper -->
+          <div class="keyboard-container" id="keyboardContainer" style="display:none;">
+            <div class="keyboard-wrap" id="keyboardWrap"></div>
+          </div>
+
+          <!-- Sample detail -->
+          <div class="card sample-detail" id="sampleDetail">
+            <div class="detail-empty">Select a sample to view details</div>
+          </div>
+
+          <!-- Phase 2 footer -->
+          <div class="phase2-footer">
+            <button class="btn-primary" id="btnToPhase3" style="display:none;">Continue to Template</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 3: Template Configuration -->
+      <div class="phase" id="phase3">
+        <!-- Preview (left) -->
+        <div class="card preview-panel" id="previewPanel">
+          <div class="preview-header">
+            <span class="preview-title" id="previewTitle">Instrument</span>
+            <span class="preview-brand">SAMPLEARCHITECT</span>
+          </div>
+          <div class="preview-stats" id="previewStats"></div>
+          <div class="knob-grid" id="knobGrid"></div>
+          <div style="margin-top:auto;">
+            <span class="label-lg" style="display:block;margin-bottom:8px;">FX CHAIN</span>
+            <div class="fx-chain" id="fxChain">
+              <span class="fx-pill" style="opacity:0.3">No effects</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Config (right) -->
+        <div class="config-panel">
+          <div class="card">
+            <span class="label-lg" style="display:block;margin-bottom:12px;">CONTROLS</span>
+            <div class="controls-grid" id="controlsGrid"></div>
+          </div>
+          <div class="card">
+            <span class="label-lg" style="display:block;margin-bottom:12px;">EFFECTS</span>
+            <div id="effectsPanel"></div>
+          </div>
+          <div class="phase3-footer">
+            <button class="btn-primary" id="btnToPhase4">Continue to Export</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 4: Export / Build -->
+      <div class="phase" id="phase4">
+        <div class="export-column">
+          <!-- Summary -->
+          <div class="card">
+            <span class="label-lg" style="display:block;margin-bottom:14px;">SUMMARY</span>
+            <div class="summary-grid" id="summaryGrid"></div>
+          </div>
+
+          <!-- Output -->
+          <div class="card">
+            <span class="label-lg" style="display:block;margin-bottom:14px;">OUTPUT FORMAT</span>
+            <div class="output-row">
+              <div class="output-info">
+                <span class="output-format">Kontakt 6+</span>
+                <span class="output-desc">KSP script + setup guide</span>
+              </div>
+              <span class="output-badge">.ksp</span>
+            </div>
+          </div>
+
+          <!-- Build -->
+          <div class="card">
+            <div class="build-card-content">
+              <button class="btn-primary large" id="btnBuild">Build Instrument</button>
+              <div class="progress-container" id="progressContainer">
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-label" id="progressLabel">Preparing...</div>
+              </div>
+              <div class="completion" id="completion">
+                <div class="completion-check">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <h3>Build Complete</h3>
+                <div class="completion-actions">
+                  <button class="btn-primary" id="btnOpenFolder">Open Folder</button>
+                  <button class="btn-secondary" id="btnViewGuide">Setup Guide</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Bottom Bar ── -->
+    <div class="bottom-bar">
+      <span>SampleArchitect v1.0</span>
+      <span>Kontakt 6+</span>
+      <span>by Evenant</span>
+    </div>
+
+  </div>
+
+  <script src="js/parser.js"></script>
+  <script src="js/mapper.js"></script>
+  <script src="js/keyboard.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/template.js"></script>
+  <script src="js/ksp-gen.js"></script>
+  <script src="js/exporter.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

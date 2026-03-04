@@ -1,0 +1,617 @@
+/* app.js — Main controller, phase routing, state */
+
+// ── App State ──
+var state = {
+  currentPhase: 1,
+  completedPhases: [],
+  samples: [],
+  selectedSampleIndex: -1,
+  instrumentName: 'Instrument',
+  outputPath: null
+};
+
+// ── Phase Navigation ──
+function goToPhase(phase) {
+  if (phase < 1 || phase > 4) return;
+  if (phase > 1 && state.completedPhases.indexOf(phase - 1) === -1 && phase !== state.currentPhase) return;
+
+  state.currentPhase = phase;
+
+  // Update phase visibility
+  document.querySelectorAll('.phase').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  document.getElementById('phase' + phase).classList.add('active');
+
+  // Update step nav buttons
+  document.querySelectorAll('.step-btn').forEach(function(btn) {
+    var step = parseInt(btn.dataset.step);
+    btn.classList.remove('active', 'completed', 'disabled');
+    if (step === phase) {
+      btn.classList.add('active');
+    } else if (state.completedPhases.indexOf(step) !== -1) {
+      btn.classList.add('completed');
+    } else if (step > phase && state.completedPhases.indexOf(step - 1) === -1) {
+      btn.classList.add('disabled');
+    }
+  });
+
+  // Phase-specific init
+  if (phase === 3) renderPhase3();
+  if (phase === 4) renderPhase4();
+}
+
+function completePhase(phase) {
+  if (state.completedPhases.indexOf(phase) === -1) {
+    state.completedPhases.push(phase);
+  }
+}
+
+// ── Phase 1 Setup ──
+function initPhase1() {
+  document.getElementById('btnReady').addEventListener('click', function() {
+    completePhase(1);
+    goToPhase(2);
+  });
+
+  document.getElementById('btnDownloadTemplate').addEventListener('click', async function() {
+    try {
+      var result = await window.__TAURI__.dialog.save({
+        title: 'Choose location for template folders',
+        defaultPath: 'MySamples'
+      });
+      if (result) {
+        var folders = ['Plucked', 'Strummed', 'Harmonics', 'Sustain'];
+        for (var i = 0; i < folders.length; i++) {
+          await window.__TAURI__.core.invoke('create_directory', {
+            path: result + '/' + folders[i]
+          });
+        }
+        console.log('Template folders created at:', result);
+      }
+    } catch (err) {
+      console.error('Template folder creation failed:', err);
+    }
+  });
+}
+
+// ── Phase 2 Setup ──
+function initPhase2() {
+  var dropZone = document.getElementById('dropZone');
+
+  // Listen for Tauri file drop events
+  if (window.__TAURI__ && window.__TAURI__.event) {
+    window.__TAURI__.event.listen('tauri://drag-drop', function(event) {
+      var paths = event.payload.paths || [];
+      if (paths.length > 0) {
+        handleFileDrop(paths[0]);
+      }
+    });
+  }
+
+  // Also handle native HTML drag/drop as fallback display
+  dropZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', function() {
+    dropZone.classList.remove('drag-over');
+  });
+
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    // The Tauri event handler above will process the actual file paths
+  });
+}
+
+async function handleFileDrop(dirPath) {
+  try {
+    var filePaths = await window.__TAURI__.core.invoke('read_dir_recursive', { path: dirPath });
+
+    state.samples = [];
+    filePaths.forEach(function(fp) {
+      var filename = fp.split('/').pop().split('\\').pop();
+      var parsed = parseFilename(filename, fp);
+      state.samples.push(parsed);
+    });
+
+    if (state.samples.length === 0) return;
+
+    // Auto-detect instrument name
+    var firstMatched = state.samples.find(function(s) { return s.parsed; });
+    if (firstMatched) {
+      state.instrumentName = firstMatched.instrument;
+      document.getElementById('projectName').textContent = state.instrumentName + ' Project';
+    }
+
+    // Assign key ranges and velocity ranges
+    assignKeyRanges(state.samples);
+    assignVelocityRanges(state.samples);
+
+    // Render
+    renderFileList();
+    renderKeyboardView();
+    updateValidation();
+
+    // Hide drop zone
+    document.getElementById('dropZone').classList.add('hidden');
+    document.getElementById('keyboardContainer').style.display = '';
+
+  } catch (err) {
+    console.error('File drop handling failed:', err);
+  }
+}
+
+function renderFileList() {
+  var scroll = document.getElementById('fileListScroll');
+  scroll.innerHTML = '';
+
+  var matched = state.samples.filter(function(s) { return s.parsed; }).length;
+  var unmatched = state.samples.length - matched;
+
+  // Badges
+  var badges = document.getElementById('fileBadges');
+  badges.innerHTML = '';
+  if (matched > 0) {
+    var b = document.createElement('span');
+    b.className = 'badge ok';
+    b.textContent = matched + ' matched';
+    badges.appendChild(b);
+  }
+  if (unmatched > 0) {
+    var b2 = document.createElement('span');
+    b2.className = 'badge warn';
+    b2.textContent = unmatched + ' unmatched';
+    badges.appendChild(b2);
+  }
+
+  // File rows
+  state.samples.forEach(function(sample, index) {
+    var row = document.createElement('div');
+    row.className = 'file-row';
+    if (index === state.selectedSampleIndex) row.classList.add('selected');
+
+    var dot = document.createElement('div');
+    dot.className = 'dot ' + (sample.parsed ? 'ok' : 'warn');
+
+    var fname = document.createElement('span');
+    fname.className = 'filename';
+    fname.textContent = sample.filename;
+
+    var pitch = document.createElement('span');
+    pitch.className = 'pitch-label';
+    pitch.textContent = sample.parsed ? formatNoteName(sample.note, sample.accidental, sample.octave) : '?';
+
+    row.appendChild(dot);
+    row.appendChild(fname);
+    row.appendChild(pitch);
+
+    row.addEventListener('click', function() {
+      selectSample(index);
+    });
+
+    scroll.appendChild(row);
+  });
+}
+
+function selectSample(index) {
+  state.selectedSampleIndex = index;
+  renderFileList();
+  renderSampleDetail();
+}
+
+function renderSampleDetail() {
+  var container = document.getElementById('sampleDetail');
+  var sample = state.samples[state.selectedSampleIndex];
+
+  if (!sample) {
+    container.innerHTML = '<div class="detail-empty">Select a sample to view details</div>';
+    return;
+  }
+
+  if (sample.parsed) {
+    container.innerHTML =
+      '<div class="inner-panel">' +
+      '<div class="detail-grid">' +
+      '<div class="detail-item"><span class="label">NOTE</span><div class="value">' + formatNoteName(sample.note, sample.accidental, sample.octave) + '</div></div>' +
+      '<div class="detail-item"><span class="label">MIDI</span><div class="value">' + sample.midiNote + '</div></div>' +
+      '<div class="detail-item"><span class="label">VELOCITY</span><div class="value">' + sample.velocityLayer + '</div></div>' +
+      '<div class="detail-item"><span class="label">ARTICULATION</span><div class="value">' + sample.articulation + '</div></div>' +
+      '<div class="detail-item"><span class="label">ROUND ROBIN</span><div class="value">' + sample.roundRobin + '</div></div>' +
+      '<div class="detail-item"><span class="label">KEY RANGE</span><div class="value">' + sample.lowKey + '–' + sample.highKey + '</div></div>' +
+      '</div>' +
+      '<div class="detail-actions">' +
+      '<button class="btn-secondary" id="btnPreview">Preview</button>' +
+      '</div>' +
+      '</div>';
+
+    document.getElementById('btnPreview').addEventListener('click', function() {
+      previewSample(sample.path);
+    });
+  } else {
+    // Unmatched: show assignment form
+    container.innerHTML =
+      '<div class="inner-panel">' +
+      '<span class="label-lg" style="display:block;margin-bottom:12px;">MANUAL ASSIGNMENT</span>' +
+      '<div class="assign-form">' +
+      '<div class="form-group"><label>Note</label><select id="assignNote">' +
+      '<option>C</option><option>D</option><option>E</option><option>F</option><option>G</option><option>A</option><option>B</option>' +
+      '</select></div>' +
+      '<div class="form-group"><label>Accidental</label><select id="assignAcc">' +
+      '<option value="">Natural</option><option value="s">Sharp</option><option value="b">Flat</option>' +
+      '</select></div>' +
+      '<div class="form-group"><label>Octave</label><select id="assignOctave">' +
+      '<option>0</option><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option>' +
+      '</select></div>' +
+      '<div class="form-group"><label>Velocity</label><select id="assignVel">' +
+      '<option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>' +
+      '</select></div>' +
+      '<div class="form-group"><label>Articulation</label><input type="text" id="assignArt" placeholder="e.g. Plucked"></div>' +
+      '<div class="form-group"><label>Round Robin</label><select id="assignRR">' +
+      '<option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>' +
+      '</select></div>' +
+      '</div>' +
+      '<div class="detail-actions">' +
+      '<button class="btn-primary" id="btnApplyAssign">Apply</button>' +
+      '<button class="btn-secondary" id="btnPreviewUnmatched">Preview</button>' +
+      '</div>' +
+      '</div>';
+
+    document.getElementById('btnApplyAssign').addEventListener('click', function() {
+      applyManualAssignment(state.selectedSampleIndex);
+    });
+
+    document.getElementById('btnPreviewUnmatched').addEventListener('click', function() {
+      previewSample(sample.path);
+    });
+  }
+}
+
+function applyManualAssignment(index) {
+  var s = state.samples[index];
+  if (!s) return;
+
+  var note = document.getElementById('assignNote').value;
+  var acc = document.getElementById('assignAcc').value || null;
+  var octave = parseInt(document.getElementById('assignOctave').value);
+  var vel = parseInt(document.getElementById('assignVel').value);
+  var art = document.getElementById('assignArt').value || 'Default';
+  var rr = parseInt(document.getElementById('assignRR').value);
+
+  s.parsed = true;
+  s.manualOverride = true;
+  s.note = note;
+  s.accidental = acc;
+  s.octave = octave;
+  s.midiNote = calcMidiNote(note, acc, octave);
+  s.velocityLayer = vel;
+  s.articulation = art;
+  s.roundRobin = rr;
+  s.instrument = state.instrumentName;
+
+  // Recalculate ranges
+  assignKeyRanges(state.samples);
+  assignVelocityRanges(state.samples);
+
+  renderFileList();
+  renderKeyboardView();
+  renderSampleDetail();
+  updateValidation();
+}
+
+function renderKeyboardView() {
+  var container = document.getElementById('keyboardWrap');
+  renderKeyboard(container, state.samples, function(midiNote) {
+    // Find first sample at this pitch
+    var idx = state.samples.findIndex(function(s) { return s.parsed && s.midiNote === midiNote; });
+    if (idx >= 0) {
+      selectSample(idx);
+      // Scroll into view
+      var rows = document.querySelectorAll('.file-row');
+      if (rows[idx]) rows[idx].scrollIntoView({ block: 'nearest' });
+    }
+  });
+}
+
+function updateValidation() {
+  var validation = validateSamples(state.samples);
+  var warningEl = document.getElementById('validationWarning');
+  var btnNext = document.getElementById('btnToPhase3');
+
+  if (validation.errors.length > 0) {
+    warningEl.classList.remove('hidden');
+    warningEl.textContent = validation.errors[0];
+    btnNext.style.display = 'none';
+  } else {
+    warningEl.classList.add('hidden');
+    btnNext.style.display = '';
+  }
+
+  if (validation.warnings.length > 0) {
+    warningEl.classList.remove('hidden');
+    warningEl.textContent = validation.warnings[0];
+    warningEl.style.borderColor = 'rgba(201,147,58,0.15)';
+    warningEl.style.background = 'var(--warn-bg)';
+    warningEl.style.color = 'var(--warn)';
+  }
+}
+
+// ── Phase 3 ──
+function renderPhase3() {
+  var stats = getSampleStats(state.samples);
+  state.instrumentName = stats.instrument || state.instrumentName;
+
+  // Preview
+  document.getElementById('previewTitle').textContent = state.instrumentName;
+  var statsEl = document.getElementById('previewStats');
+  statsEl.innerHTML =
+    '<span class="preview-stat"><strong>' + stats.totalSamples + '</strong> samples</span>' +
+    '<span class="preview-stat"><strong>' + stats.articulationCount + '</strong> articulations</span>';
+
+  renderKnobGrid();
+  renderFxChain();
+  renderControlToggles();
+  renderEffectToggles();
+}
+
+function renderKnobGrid() {
+  var grid = document.getElementById('knobGrid');
+  grid.innerHTML = '';
+
+  var enabled = getEnabledControls();
+  enabled.forEach(function(item) {
+    var knob = document.createElement('div');
+    knob.className = 'knob-item';
+
+    var val = item.config.default;
+    var svg = createKnobSVG(val);
+
+    var label = document.createElement('span');
+    label.className = 'knob-label';
+    label.textContent = item.config.label;
+
+    knob.appendChild(svg);
+    knob.appendChild(label);
+    grid.appendChild(knob);
+  });
+}
+
+function createKnobSVG(value) {
+  var size = 52;
+  var cx = size / 2;
+  var cy = size / 2;
+  var radius = 20;
+  var circumference = 2 * Math.PI * radius;
+  var arcLength = circumference * (270 / 360);
+  var valueLength = arcLength * (value / 100);
+
+  var ns = 'http://www.w3.org/2000/svg';
+  var svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('width', size);
+  svg.setAttribute('height', size);
+  svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);
+
+  // Track
+  var track = document.createElementNS(ns, 'circle');
+  track.setAttribute('cx', cx);
+  track.setAttribute('cy', cy);
+  track.setAttribute('r', radius);
+  track.setAttribute('fill', 'none');
+  track.setAttribute('stroke', 'rgba(255,255,255,0.04)');
+  track.setAttribute('stroke-width', '3');
+  track.setAttribute('stroke-linecap', 'round');
+  track.setAttribute('stroke-dasharray', arcLength + ' ' + (circumference - arcLength));
+  track.setAttribute('transform', 'rotate(135 ' + cx + ' ' + cy + ')');
+  svg.appendChild(track);
+
+  // Value
+  var valCircle = document.createElementNS(ns, 'circle');
+  valCircle.setAttribute('cx', cx);
+  valCircle.setAttribute('cy', cy);
+  valCircle.setAttribute('r', radius);
+  valCircle.setAttribute('fill', 'none');
+  valCircle.setAttribute('stroke', 'rgba(255,255,255,0.35)');
+  valCircle.setAttribute('stroke-width', '3');
+  valCircle.setAttribute('stroke-linecap', 'round');
+  valCircle.setAttribute('stroke-dasharray', valueLength + ' ' + (circumference - valueLength));
+  valCircle.setAttribute('transform', 'rotate(135 ' + cx + ' ' + cy + ')');
+  svg.appendChild(valCircle);
+
+  // Value label
+  var text = document.createElementNS(ns, 'text');
+  text.setAttribute('x', cx);
+  text.setAttribute('y', cy + 4);
+  text.setAttribute('text-anchor', 'middle');
+  text.setAttribute('fill', 'rgba(255,255,255,0.5)');
+  text.setAttribute('font-family', 'SF Mono, Fira Code, monospace');
+  text.setAttribute('font-size', '10');
+  text.textContent = value;
+  svg.appendChild(text);
+
+  return svg;
+}
+
+function renderFxChain() {
+  var chain = document.getElementById('fxChain');
+  chain.innerHTML = '';
+
+  var enabled = getEnabledEffects();
+  if (enabled.length === 0) {
+    chain.innerHTML = '<span class="fx-pill" style="opacity:0.3">No effects</span>';
+    return;
+  }
+
+  enabled.forEach(function(item, i) {
+    if (i > 0) {
+      var arrow = document.createElement('span');
+      arrow.className = 'fx-arrow';
+      arrow.textContent = '\u2192';
+      chain.appendChild(arrow);
+    }
+    var pill = document.createElement('span');
+    pill.className = 'fx-pill';
+    pill.textContent = item.config.label;
+    chain.appendChild(pill);
+  });
+}
+
+function renderControlToggles() {
+  var grid = document.getElementById('controlsGrid');
+  grid.innerHTML = '';
+
+  Object.keys(templateConfig.controls).forEach(function(key) {
+    var ctrl = templateConfig.controls[key];
+    var toggle = document.createElement('div');
+    toggle.className = 'control-toggle';
+
+    var checkbox = document.createElement('div');
+    checkbox.className = 'toggle-checkbox' + (ctrl.enabled ? ' checked' : '');
+
+    var label = document.createElement('span');
+    label.className = 'toggle-label';
+    label.textContent = ctrl.label;
+
+    toggle.appendChild(checkbox);
+    toggle.appendChild(label);
+
+    toggle.addEventListener('click', function() {
+      toggleControl(key);
+      checkbox.classList.toggle('checked');
+      renderKnobGrid();
+    });
+
+    grid.appendChild(toggle);
+  });
+}
+
+function renderEffectToggles() {
+  var panel = document.getElementById('effectsPanel');
+  panel.innerHTML = '';
+
+  Object.keys(templateConfig.effects).forEach(function(key) {
+    var fx = templateConfig.effects[key];
+    var toggle = document.createElement('div');
+    toggle.className = 'effect-toggle';
+
+    var checkbox = document.createElement('div');
+    checkbox.className = 'toggle-checkbox' + (fx.enabled ? ' checked' : '');
+
+    var info = document.createElement('div');
+    info.className = 'effect-info';
+    info.innerHTML = '<div class="effect-name">' + fx.label + '</div>' +
+                     '<div class="effect-desc">' + fx.description + '</div>';
+
+    toggle.appendChild(checkbox);
+    toggle.appendChild(info);
+
+    toggle.addEventListener('click', function() {
+      toggleEffect(key);
+      checkbox.classList.toggle('checked');
+      renderFxChain();
+    });
+
+    panel.appendChild(toggle);
+  });
+}
+
+// ── Phase 4 ──
+function renderPhase4() {
+  var stats = getSampleStats(state.samples);
+
+  var grid = document.getElementById('summaryGrid');
+  grid.innerHTML =
+    '<div class="summary-cell"><span class="label">INSTRUMENT</span><div class="value">' + stats.instrument + '</div></div>' +
+    '<div class="summary-cell"><span class="label">SAMPLES</span><div class="value">' + stats.totalSamples + '</div></div>' +
+    '<div class="summary-cell"><span class="label">ARTICULATIONS</span><div class="value">' + stats.articulationCount + '</div></div>' +
+    '<div class="summary-cell"><span class="label">VEL LAYERS</span><div class="value">' + stats.maxVelocityLayers + '</div></div>' +
+    '<div class="summary-cell"><span class="label">ROUND ROBINS</span><div class="value">' + stats.maxRoundRobins + '</div></div>' +
+    '<div class="summary-cell"><span class="label">TEMPLATE</span><div class="value">Chromatic</div></div>';
+}
+
+async function doBuild() {
+  try {
+    var result = await window.__TAURI__.dialog.save({
+      title: 'Choose output directory',
+      defaultPath: state.instrumentName + '_SampleArchitect'
+    });
+
+    if (!result) return;
+
+    var stats = getSampleStats(state.samples);
+
+    // Show progress
+    var btn = document.getElementById('btnBuild');
+    btn.style.display = 'none';
+    var progress = document.getElementById('progressContainer');
+    progress.classList.add('visible');
+
+    await exportInstrument(state.samples, stats, templateConfig, result, function(stageIdx, label) {
+      var pct = ((stageIdx + 1) / 8) * 100;
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressLabel').textContent = label;
+    });
+
+    state.outputPath = result + '/' + stats.instrument + '_SampleArchitect';
+
+    // Show completion
+    progress.classList.remove('visible');
+    document.getElementById('completion').classList.add('visible');
+
+  } catch (err) {
+    console.error('Build failed:', err);
+    document.getElementById('progressLabel').textContent = 'Build failed: ' + err;
+  }
+}
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', function() {
+  // Step nav clicks
+  document.querySelectorAll('.step-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var step = parseInt(btn.dataset.step);
+      goToPhase(step);
+    });
+  });
+
+  // Phase 1
+  initPhase1();
+
+  // Phase 2
+  initPhase2();
+
+  // Phase 2 → Phase 3 button
+  document.getElementById('btnToPhase3').addEventListener('click', function() {
+    completePhase(2);
+    goToPhase(3);
+  });
+
+  // Phase 3 → Phase 4 button
+  document.getElementById('btnToPhase4').addEventListener('click', function() {
+    completePhase(3);
+    goToPhase(4);
+  });
+
+  // Phase 4 build
+  document.getElementById('btnBuild').addEventListener('click', function() {
+    doBuild();
+  });
+
+  // Phase 4 open folder
+  document.getElementById('btnOpenFolder').addEventListener('click', function() {
+    if (state.outputPath && window.__TAURI__ && window.__TAURI__.shell) {
+      window.__TAURI__.shell.open(state.outputPath);
+    }
+  });
+
+  // Phase 4 view guide
+  document.getElementById('btnViewGuide').addEventListener('click', function() {
+    if (state.outputPath && window.__TAURI__ && window.__TAURI__.shell) {
+      window.__TAURI__.shell.open(state.outputPath + '/Setup Guide.txt');
+    }
+  });
+
+  // Set initial phase
+  goToPhase(1);
+});
