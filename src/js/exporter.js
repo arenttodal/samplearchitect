@@ -110,6 +110,7 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     });
 
     var knobBytes = getKnobPngBytes();
+    console.log('Exporting knob: knob_gray (KNOB_GRAY_BASE64),', knobBytes.length, 'bytes');
     await window.__TAURI__.core.invoke('write_file_bytes', {
       path: kontaktPath + '/Resources/pictures/knob.png',
       bytes: Array.from(knobBytes)
