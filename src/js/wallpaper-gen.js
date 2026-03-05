@@ -9,9 +9,9 @@
  * @param {number} sampleCount - Number of mapped samples
  * @returns {Promise<Uint8Array>} PNG bytes
  */
-async function generateWallpaper(instrumentName, sampleCount) {
+async function generateWallpaper(instrumentName, sampleCount, customHeight) {
   var width = 633;
-  var height = 500;
+  var height = customHeight || 500;
 
   var canvas;
   if (typeof OffscreenCanvas !== 'undefined') {

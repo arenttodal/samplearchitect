@@ -23,13 +23,14 @@ function escapeXml(str) {
     .replace(/'/g, '&apos;');
 }
 
-function generateDspreset(samples, stats, config, instrumentName) {
+function generateDspreset(samples, stats, config, instrumentName, positions) {
   var mapped = samples.filter(function(s) { return s.parsed; });
   instrumentName = instrumentName || stats.instrument || 'Instrument';
   var maxRR = stats.maxRoundRobins;
 
   var enabledControls = getEnabledControls();
   var enabledEffects = getEnabledEffects();
+  var hasPositions = positions && positions.length > 0;
 
   var lines = [];
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
@@ -46,7 +47,7 @@ function generateDspreset(samples, stats, config, instrumentName) {
   lines.push('      <label text="SAMPLEARCHITECT" x="600" y="20" width="200" height="16"');
   lines.push('             textSize="10" textColor="FF5C5C65" hAlign="right"/>');
 
-  // Knobs — 4x2 grid, only enabled controls
+  // Knobs — use builder positions scaled to DS coordinates, or fallback 4×2 grid
   var xPositions = [30, 130, 230, 330];
   var row1Y = 120;
   var row2Y = 230;
@@ -55,10 +56,18 @@ function generateDspreset(samples, stats, config, instrumentName) {
     var binding = DS_CONTROL_BINDINGS[item.key];
     if (!binding) return;
 
-    var row = Math.floor(index / 4);
-    var col = index % 4;
-    var x = xPositions[col];
-    var y = row === 0 ? row1Y : row2Y;
+    var x, y;
+    var pos = hasPositions && positions.find(function(p) { return p.key === item.key; });
+    if (pos) {
+      // Scale from 633×500 canvas to 812×375 DS coordinates
+      x = Math.round(pos.x * 812 / 633);
+      y = Math.round(pos.y * 375 / 500);
+    } else {
+      var row = Math.floor(index / 4);
+      var col = index % 4;
+      x = xPositions[col];
+      y = row === 0 ? row1Y : row2Y;
+    }
     var position = binding.pos != null ? binding.pos : 0;
 
     lines.push('');

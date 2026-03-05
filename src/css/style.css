@@ -856,92 +856,32 @@ code, .code-block {
   display: flex;
   flex-direction: column;
   min-width: 0;
-}
-
-.preview-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 20px;
-}
-
-.preview-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--h1);
-}
-
-.preview-brand {
-  font-size: 8px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--faint);
-}
-
-.preview-stats {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.preview-stat {
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.preview-stat strong {
-  color: var(--h2);
-  font-weight: 600;
-}
-
-/* Knob grid */
-.knob-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.knob-item {
-  display: flex;
-  flex-direction: column;
+  padding: 12px;
   align-items: center;
-  gap: 6px;
-  width: 72px;
+  justify-content: center;
 }
 
-.knob-label {
-  font-size: 9px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--muted);
+.preview-panel canvas {
+  width: 100%;
+  max-width: 633px;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.04);
 }
 
-/* FX Chain */
-.fx-chain {
+/* Layout actions card */
+.layout-actions {
   display: flex;
-  align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
-.fx-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid var(--divider);
-  border-radius: 20px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--body);
-}
-
-.fx-arrow {
-  font-size: 10px;
-  color: var(--faint);
+/* Phase 4 preview canvas */
+#previewCanvas {
+  width: 100%;
+  max-width: 560px;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.04);
 }
 
 /* Controls panel (right) */

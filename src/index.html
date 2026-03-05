@@ -178,20 +178,9 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
 
       <!-- Phase 3: Template Configuration -->
       <div class="phase" id="phase3">
-        <!-- Preview (left) -->
+        <!-- Preview canvas (left) -->
         <div class="card preview-panel" id="previewPanel">
-          <div class="preview-header">
-            <span class="preview-title" id="previewTitle">Instrument</span>
-            <span class="preview-brand">SAMPLEARCHITECT</span>
-          </div>
-          <div class="preview-stats" id="previewStats"></div>
-          <div class="knob-grid" id="knobGrid"></div>
-          <div style="margin-top:auto;">
-            <span class="label-lg" style="display:block;margin-bottom:8px;">FX CHAIN</span>
-            <div class="fx-chain" id="fxChain">
-              <span class="fx-pill" style="opacity:0.3">No effects</span>
-            </div>
-          </div>
+          <canvas id="layoutCanvas" width="633" height="500"></canvas>
         </div>
 
         <!-- Config (right) -->
@@ -203,6 +192,12 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
           <div class="card">
             <span class="label-lg" style="display:block;margin-bottom:12px;">EFFECTS</span>
             <div id="effectsPanel"></div>
+          </div>
+          <div class="card">
+            <span class="label-lg" style="display:block;margin-bottom:12px;">LAYOUT</span>
+            <div class="layout-actions">
+              <button class="btn-secondary btn-sm" id="btnAutoLayout">Auto Layout</button>
+            </div>
           </div>
           <div class="card">
             <span class="label-lg" style="display:block;margin-bottom:12px;">EXPORT FORMAT</span>
@@ -217,6 +212,12 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
       <!-- Phase 4: Export / Build -->
       <div class="phase" id="phase4">
         <div class="export-column">
+          <!-- Preview (read-only) -->
+          <div class="card">
+            <span class="label-lg" style="display:block;margin-bottom:14px;">PREVIEW</span>
+            <canvas id="previewCanvas" width="633" height="500"></canvas>
+          </div>
+
           <!-- Summary -->
           <div class="card">
             <span class="label-lg" style="display:block;margin-bottom:14px;">SUMMARY</span>
@@ -307,6 +308,7 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
   <script src="js/dspreset-gen.js"></script>
   <script src="js/wallpaper-gen.js"></script>
   <script src="js/knob-asset.js"></script>
+  <script src="js/layout-builder.js"></script>
   <script src="js/exporter.js"></script>
   <script src="js/chat.js"></script>
   <script src="js/app.js"></script>

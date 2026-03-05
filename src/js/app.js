@@ -8,7 +8,11 @@ var state = {
   selectedSampleIndex: -1,
   instrumentName: 'My Instrument',
   outputPath: null,
-  recordingPlan: null
+  recordingPlan: null,
+  layoutBuilder: null,
+  previewBuilder: null,
+  knobPositions: null,
+  uiHeight: null
 };
 
 // ── Phase Navigation ──
@@ -568,119 +572,21 @@ function updateValidation() {
 function renderPhase3() {
   var stats = getSampleStats(state.samples);
 
-  // Preview — always use the user-editable name
-  document.getElementById('previewTitle').textContent = state.instrumentName;
-  var statsEl = document.getElementById('previewStats');
-  statsEl.innerHTML =
-    '<span class="preview-stat"><strong>' + stats.totalSamples + '</strong> samples</span>' +
-    '<span class="preview-stat"><strong>' + stats.articulationCount + '</strong> articulations</span>';
+  // Initialize layout builder if not already created
+  if (!state.layoutBuilder) {
+    var canvas = document.getElementById('layoutCanvas');
+    state.layoutBuilder = new LayoutBuilder(canvas);
+  }
 
-  renderKnobGrid();
-  renderFxChain();
+  // Update builder state
+  state.layoutBuilder.instrumentName = state.instrumentName;
+  state.layoutBuilder.sampleCount = stats.totalSamples;
+  state.layoutBuilder.updateControls();
+  state.layoutBuilder.updateEffects();
+
   renderControlToggles();
   renderEffectToggles();
   renderFormatToggles();
-}
-
-function renderKnobGrid() {
-  var grid = document.getElementById('knobGrid');
-  grid.innerHTML = '';
-
-  var enabled = getEnabledControls();
-  enabled.forEach(function(item) {
-    var knob = document.createElement('div');
-    knob.className = 'knob-item';
-
-    var val = item.config.default;
-    var svg = createKnobSVG(val);
-
-    var label = document.createElement('span');
-    label.className = 'knob-label';
-    label.textContent = item.config.label;
-
-    knob.appendChild(svg);
-    knob.appendChild(label);
-    grid.appendChild(knob);
-  });
-}
-
-function createKnobSVG(value) {
-  var size = 52;
-  var cx = size / 2;
-  var cy = size / 2;
-  var radius = 20;
-  var circumference = 2 * Math.PI * radius;
-  var arcLength = circumference * (270 / 360);
-  var valueLength = arcLength * (value / 100);
-
-  var ns = 'http://www.w3.org/2000/svg';
-  var svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('width', size);
-  svg.setAttribute('height', size);
-  svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);
-
-  // Track
-  var track = document.createElementNS(ns, 'circle');
-  track.setAttribute('cx', cx);
-  track.setAttribute('cy', cy);
-  track.setAttribute('r', radius);
-  track.setAttribute('fill', 'none');
-  track.setAttribute('stroke', 'rgba(255,255,255,0.04)');
-  track.setAttribute('stroke-width', '3');
-  track.setAttribute('stroke-linecap', 'round');
-  track.setAttribute('stroke-dasharray', arcLength + ' ' + (circumference - arcLength));
-  track.setAttribute('transform', 'rotate(135 ' + cx + ' ' + cy + ')');
-  svg.appendChild(track);
-
-  // Value
-  var valCircle = document.createElementNS(ns, 'circle');
-  valCircle.setAttribute('cx', cx);
-  valCircle.setAttribute('cy', cy);
-  valCircle.setAttribute('r', radius);
-  valCircle.setAttribute('fill', 'none');
-  valCircle.setAttribute('stroke', 'rgba(255,255,255,0.35)');
-  valCircle.setAttribute('stroke-width', '3');
-  valCircle.setAttribute('stroke-linecap', 'round');
-  valCircle.setAttribute('stroke-dasharray', valueLength + ' ' + (circumference - valueLength));
-  valCircle.setAttribute('transform', 'rotate(135 ' + cx + ' ' + cy + ')');
-  svg.appendChild(valCircle);
-
-  // Value label
-  var text = document.createElementNS(ns, 'text');
-  text.setAttribute('x', cx);
-  text.setAttribute('y', cy + 4);
-  text.setAttribute('text-anchor', 'middle');
-  text.setAttribute('fill', 'rgba(255,255,255,0.5)');
-  text.setAttribute('font-family', 'SF Mono, Fira Code, monospace');
-  text.setAttribute('font-size', '10');
-  text.textContent = value;
-  svg.appendChild(text);
-
-  return svg;
-}
-
-function renderFxChain() {
-  var chain = document.getElementById('fxChain');
-  chain.innerHTML = '';
-
-  var enabled = getEnabledEffects();
-  if (enabled.length === 0) {
-    chain.innerHTML = '<span class="fx-pill" style="opacity:0.3">No effects</span>';
-    return;
-  }
-
-  enabled.forEach(function(item, i) {
-    if (i > 0) {
-      var arrow = document.createElement('span');
-      arrow.className = 'fx-arrow';
-      arrow.textContent = '\u2192';
-      chain.appendChild(arrow);
-    }
-    var pill = document.createElement('span');
-    pill.className = 'fx-pill';
-    pill.textContent = item.config.label;
-    chain.appendChild(pill);
-  });
 }
 
 function renderControlToggles() {
@@ -705,7 +611,9 @@ function renderControlToggles() {
     toggle.addEventListener('click', function() {
       toggleControl(key);
       checkbox.classList.toggle('checked');
-      renderKnobGrid();
+      if (state.layoutBuilder) {
+        state.layoutBuilder.updateControls();
+      }
     });
 
     grid.appendChild(toggle);
@@ -766,7 +674,9 @@ function renderEffectToggles() {
     toggle.addEventListener('click', function() {
       toggleEffect(key);
       checkbox.classList.toggle('checked');
-      renderFxChain();
+      if (state.layoutBuilder) {
+        state.layoutBuilder.updateEffects();
+      }
     });
 
     panel.appendChild(toggle);
@@ -777,6 +687,37 @@ function renderEffectToggles() {
 function renderPhase4() {
   var stats = getSampleStats(state.samples);
   var formats = getEnabledFormats();
+
+  // Capture builder positions for export
+  if (state.layoutBuilder) {
+    state.knobPositions = state.layoutBuilder.getPositions();
+    state.uiHeight = state.layoutBuilder.getRequiredHeight();
+  }
+
+  // Render read-only preview canvas
+  if (!state.previewBuilder) {
+    var previewCanvas = document.getElementById('previewCanvas');
+    if (previewCanvas) {
+      state.previewBuilder = new LayoutBuilder(previewCanvas, { readonly: true });
+    }
+  }
+  if (state.previewBuilder) {
+    state.previewBuilder.instrumentName = state.instrumentName;
+    state.previewBuilder.sampleCount = stats.totalSamples;
+    state.previewBuilder.updateControls();
+    state.previewBuilder.updateEffects();
+    // Copy positions from layout builder
+    if (state.knobPositions) {
+      state.previewBuilder.knobs.forEach(function(k) {
+        var saved = state.knobPositions.find(function(p) { return p.key === k.key; });
+        if (saved) {
+          k.x = saved.x;
+          k.y = saved.y;
+        }
+      });
+      state.previewBuilder.render();
+    }
+  }
 
   var grid = document.getElementById('summaryGrid');
   grid.innerHTML =
@@ -912,8 +853,20 @@ document.addEventListener('DOMContentLoaded', function() {
     goToPhase(3);
   });
 
+  // Phase 3 Auto Layout button
+  document.getElementById('btnAutoLayout').addEventListener('click', function() {
+    if (state.layoutBuilder) {
+      state.layoutBuilder.autoLayout();
+    }
+  });
+
   // Phase 3 → Phase 4 button
   document.getElementById('btnToPhase4').addEventListener('click', function() {
+    // Capture positions before leaving Phase 3
+    if (state.layoutBuilder) {
+      state.knobPositions = state.layoutBuilder.getPositions();
+      state.uiHeight = state.layoutBuilder.getRequiredHeight();
+    }
     completePhase(3);
     goToPhase(4);
   });
