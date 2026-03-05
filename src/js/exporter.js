@@ -65,6 +65,10 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
   var doDS = formats.indexOf('decentsampler') !== -1;
   var doBoth = doKontakt && doDS;
 
+  // Get builder positions from app state
+  var positions = (typeof state !== 'undefined' && state.knobPositions) ? state.knobPositions : null;
+  var uiHeight = (typeof state !== 'undefined' && state.uiHeight) ? state.uiHeight : null;
+
   var basePath = outputDir;
 
   // Determine sub-paths
@@ -95,7 +99,7 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     await copySamplesToFolder(mapped, kontaktPath);
 
     progress('Generating Kontakt resources');
-    var wallpaperBytes = await generateWallpaper(instrumentName, mapped.length);
+    var wallpaperBytes = await generateWallpaper(instrumentName, mapped.length, uiHeight);
     await window.__TAURI__.core.invoke('write_file_bytes', {
       path: kontaktPath + '/Resources/pictures/wallpaper.png',
       bytes: Array.from(wallpaperBytes)
@@ -116,7 +120,7 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     });
 
     progress('Generating KSP script');
-    var kspScript = generateKSP(mapped, stats, config);
+    var kspScript = generateKSP(mapped, stats, config, positions, uiHeight);
     lastGeneratedKSP = kspScript;
 
     await window.__TAURI__.core.invoke('write_text_file', {
@@ -131,7 +135,7 @@ async function exportInstrument(samples, stats, config, outputDir, onProgress) {
     await copySamplesToFolder(mapped, dsPath);
 
     progress('Generating .dspreset');
-    var dsXml = generateDspreset(mapped, stats, config, instrumentName);
+    var dsXml = generateDspreset(mapped, stats, config, instrumentName, positions);
     await window.__TAURI__.core.invoke('write_text_file', {
       path: dsPath + '/' + instrumentName + '.dspreset',
       contents: dsXml
