@@ -373,6 +373,14 @@ body {
   flex-direction: row;
 }
 
+/* Quick start bar */
+.quick-start-bar {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
 .guide-card {
   flex: 1;
   overflow-y: auto;
@@ -1532,6 +1540,17 @@ code, .code-block {
 @keyframes chatDot {
   0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
   40% { opacity: 1; transform: scale(1); }
+}
+
+/* Chat skip link */
+.chat-skip-link {
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.chat-skip-link:hover {
+  color: var(--h2);
 }
 
 /* Plan panel (right, 40%) */

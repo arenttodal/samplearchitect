@@ -145,11 +145,23 @@ function renderChatMessages() {
 
   container.innerHTML = '';
 
-  // Welcome message
+  // Welcome message + skip link
   var welcome = document.createElement('div');
   welcome.className = 'chat-msg assistant';
-  welcome.innerHTML = '<div class="chat-bubble assistant">' + escapeHtml(WELCOME_MESSAGE).replace(/\n/g, '<br>') + '</div>';
+  welcome.innerHTML = '<div class="chat-bubble assistant">' +
+    escapeHtml(WELCOME_MESSAGE).replace(/\n/g, '<br>') +
+    '<br><br><a href="#" class="chat-skip-link" id="chatSkipLink">Already have your samples ready? Skip to import \u2192</a>' +
+    '</div>';
   container.appendChild(welcome);
+
+  // Wire skip link
+  var skipLink = document.getElementById('chatSkipLink');
+  if (skipLink) {
+    skipLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      skipToImport();
+    });
+  }
 
   chatState.messages.forEach(function(msg) {
     var div = document.createElement('div');
@@ -343,6 +355,21 @@ function saveSettings() {
   closeSettingsModal();
   // Update Phase 1 UI based on API key presence
   updatePhase1Layout();
+}
+
+// ── Quick Start — Skip to Import ──
+
+function skipToImport() {
+  state.recordingPlan = {
+    instrument: 'My Instrument',
+    articulations: ['Default'],
+    velocityLayers: 1,
+    roundRobins: 1,
+    noteRange: null
+  };
+  state.instrumentName = 'My Instrument';
+  completePhase(1);
+  goToPhase(2);
 }
 
 // ── Phase 1 Layout Toggle ──
