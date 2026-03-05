@@ -818,11 +818,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  // Phase 1 Quick Start button
-  document.getElementById('btnQuickStart').addEventListener('click', function() {
-    skipToImport();
-  });
-
   // Phase 1 — decide layout based on API key
   updatePhase1Layout();
   renderChatMessages();

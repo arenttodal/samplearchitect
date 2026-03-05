@@ -373,14 +373,6 @@ body {
   flex-direction: row;
 }
 
-/* Quick start bar */
-.quick-start-bar {
-  width: 100%;
-  display: flex;
-  justify-content: flex-end;
-  flex-shrink: 0;
-}
-
 .guide-card {
   flex: 1;
   overflow-y: auto;

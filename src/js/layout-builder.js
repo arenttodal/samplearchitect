@@ -61,6 +61,7 @@ LayoutBuilder.prototype._loadKnobImage = function() {
     self.render();
   };
   img.src = KNOB_GRAY_DATA_URL;
+  console.log('Loading knob from:', KNOB_GRAY_DATA_URL.substring(0, 50));
 };
 
 LayoutBuilder.prototype._bindEvents = function() {
