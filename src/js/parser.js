@@ -70,3 +70,34 @@ function getVelocityRange(layer, totalLayers) {
   const high = layer === totalLayers ? 127 : (layer * step) - 1;
   return { low, high };
 }
+
+/* ── Name sanitizing ──
+   Instrument names come from filename tokens or user input and articulations
+   from free text; both end up in file paths, KSP strings and markup. */
+
+var WINDOWS_RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
+
+/* A single path segment that is valid on macOS, Windows and Linux. */
+function safePathSegment(name, fallback) {
+  var s = String(name == null ? '' : name)
+    .replace(/[\u0000-\u001f<>:"\/\\|?*]/g, '_')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s.]+|[\s.]+$/g, '')
+    .slice(0, 64)
+    .replace(/[\s.]+$/, '');
+  if (!s || /^_+$/.test(s) || WINDOWS_RESERVED.test(s)) return fallback || 'Untitled';
+  return s;
+}
+
+/* Text safe inside a KSP string literal and a { } comment. */
+function kspSafeText(name) {
+  return String(name == null ? '' : name)
+    .replace(/["{}\u0000-\u001f]/g, '')
+    .trim()
+    .slice(0, 64);
+}
+
+/* Folder a sample is exported into: Samples/<this>/<filename> */
+function articulationFolder(sample) {
+  return safePathSegment(sample.articulation, 'Uncategorized');
+}

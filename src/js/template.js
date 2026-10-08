@@ -12,15 +12,16 @@ var templateConfig = {
     attack:    { label: 'Attack',  enabled: true, default: 0  },
     release:   { label: 'Release', enabled: true, default: 35 },
     tune:      { label: 'Tune',    enabled: true, default: 50 },
-    cutoff:    { label: 'Cutoff',  enabled: true, default: 80 },
-    resonance: { label: 'Res',     enabled: true, default: 20 },
-    reverb:    { label: 'Reverb',  enabled: true, default: 30 }
+    cutoff:    { label: 'Cutoff',  enabled: true, default: 80, requires: 'filter' },
+    resonance: { label: 'Res',     enabled: true, default: 20, requires: 'filter' },
+    reverb:    { label: 'Reverb',  enabled: true, default: 30, requires: 'reverb' }
   },
   effects: {
-    filter: { label: 'Filter',  description: 'LP / HP / BP',     enabled: true  },
-    eq:     { label: 'EQ',      description: '2-band parametric', enabled: false },
+    /* EQ is not offered: Kontakt's $EFFECT_TYPE_PARA_EQ is inconsistent across
+       versions, so neither generator could honour the toggle. */
+    filter: { label: 'Filter',  description: 'Low-pass',          enabled: true  },
     reverb: { label: 'Reverb',  description: 'Algorithmic',       enabled: true  },
-    delay:  { label: 'Delay',   description: 'Tempo-synced',      enabled: true  }
+    delay:  { label: 'Delay',   description: 'Stereo echo',       enabled: true  }
   }
 };
 
@@ -52,10 +53,17 @@ function toggleEffect(key) {
   templateConfig.effects[key].enabled = !templateConfig.effects[key].enabled;
 }
 
+/* A control whose target effect is switched off has nothing to drive. */
+function isControlAvailable(key) {
+  var req = templateConfig.controls[key].requires;
+  return !req || !!(templateConfig.effects[req] && templateConfig.effects[req].enabled);
+}
+
+/* Controls that will actually be generated: toggled on and available. */
 function getEnabledControls() {
   var result = [];
   Object.keys(templateConfig.controls).forEach(function(key) {
-    if (templateConfig.controls[key].enabled) {
+    if (templateConfig.controls[key].enabled && isControlAvailable(key)) {
       result.push({ key: key, config: templateConfig.controls[key] });
     }
   });
