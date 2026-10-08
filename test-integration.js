@@ -604,6 +604,11 @@ assert('articulation folder fallback', san.g === 'Uncategorized');
 console.log('\n=== Test 23: Tauri Config ===');
 const tauriConf = JSON.parse(fs.readFileSync(path.join(__dirname, 'src-tauri/tauri.conf.json'), 'utf-8'));
 assert('no plugins key', !('plugins' in tauriConf));
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8'));
+const cargoVer = (fs.readFileSync(path.join(__dirname, 'src-tauri/Cargo.toml'), 'utf-8').match(/^version = "([^"]+)"/m) || [])[1];
+const uiVer = (fs.readFileSync(path.join(__dirname, 'src/js/parser.js'), 'utf-8').match(/SA_VERSION = '([^']+)'/) || [])[1];
+assert('versions agree (package, tauri, Cargo, UI)', pkg.version === tauriConf.version && cargoVer === pkg.version && uiVer === pkg.version);
+assert('bundle icons exist', tauriConf.bundle.icon.every(function(i) { return fs.existsSync(path.join(__dirname, 'src-tauri', i)); }));
 
 // ── Final result ──
 if (failed) {
