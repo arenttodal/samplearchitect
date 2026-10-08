@@ -56,6 +56,7 @@ async function copySamplesToFolder(mapped, targetBase) {
 }
 
 async function exportInstrument(samples, stats, config, outputDir, onProgress) {
+  lastGeneratedKSP = ''; // never offer a script from an earlier build
   var mapped = samples.filter(function(s) { return s.parsed; });
   var instrumentName = stats.instrument || 'Instrument';
   var fileBase = safePathSegment(instrumentName, 'Instrument');
