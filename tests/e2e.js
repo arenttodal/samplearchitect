@@ -211,6 +211,7 @@ async function main() {
 
   const consoleErrors = [];
   page.on('pageerror', function(e) { consoleErrors.push(String(e)); });
+  page.on('response', function(r) { if (r.status() >= 400) consoleErrors.push('HTTP ' + r.status() + ' ' + r.url()); });
   page.on('console', function(m) { if (m.type() === 'error') consoleErrors.push(m.text()); });
 
   await page.exposeFunction('__nodeIpc', function(cmd, args) {
@@ -219,6 +220,13 @@ async function main() {
   await page.addInitScript(shimSource());
   // Never prompt for a key / hit the network in tests.
   await page.addInitScript(function() { try { localStorage.clear(); } catch (e) {} });
+
+  // Set E2E_SCREENSHOTS=<dir> to save screenshots of the key screens
+  async function shot(name) {
+    if (!process.env.E2E_SCREENSHOTS) return;
+    fs.mkdirSync(process.env.E2E_SCREENSHOTS, { recursive: true });
+    await page.screenshot({ path: path.join(process.env.E2E_SCREENSHOTS, name + '.png') });
+  }
 
   async function freshLoad() {
     await page.goto(url);
@@ -261,10 +269,14 @@ async function main() {
   const trimmed = await page.evaluate(function() { return state.samples.filter(function(s) { return s.trimApproved; }).map(function(s) { return s.filename; }); });
   check('only the sample with leading silence gets a trim', trimmed.length === 1 && /C3/.test(trimmed[0]), trimmed.join(','));
 
+  await shot('2-samples-imported');
   // Rename instrument to something hostile to paths / markup / KSP strings
   await page.fill('#instrumentNameInput', 'My "Kantele"/<b>x</b>');
   await page.click('#btnToPhase3');
   check('Phase 3 active', await page.isVisible('#phase3'));
+  await shot('3-template');
+  const activeStep = await page.$eval('.step-btn.active', function(b) { return b.dataset.step; });
+  check('step nav highlights step 3', activeStep === '3', activeStep);
   await page.click('#btnToPhase4');
   check('Phase 4 active', await page.isVisible('#phase4'));
   const summaryHtml = await page.innerHTML('#summaryGrid');
@@ -275,6 +287,7 @@ async function main() {
   await page.click('#btnBuild');
   await page.waitForSelector('#completion.visible', { timeout: 20000 });
   check('completion screen shown', true);
+  await shot('4-build-complete');
 
   const outRoot = await page.evaluate(function() { return state.outputPath; });
   check('output root exists', fs.existsSync(outRoot), outRoot);
@@ -360,6 +373,7 @@ async function main() {
   check('mixed sample rate warning shown', /sample rate/i.test(warn), warn);
   check('unreadable WAV is reported', /E3|not audio|unreadable|invalid/i.test(warn + (await page.textContent('#fileListScroll'))), warn);
   check('Continue still allowed (warnings only)', await page.isVisible('#btnToPhase3'));
+  await shot('2b-warnings');
 
   // Assign the unmatched file to C3 → duplicate → blocked
   const unmatchedIdx = await page.evaluate(function() { return state.samples.findIndex(function(s) { return s.filename === 'recording_017.wav'; }); });
@@ -369,6 +383,7 @@ async function main() {
   await page.fill('#assignArt', 'Sustain');
   await page.click('#btnApplyAssign');
   const err = await page.textContent('#validationWarning');
+  await shot('2c-duplicate-error');
   check('duplicate mapping blocks Continue', /Duplicate/i.test(err) && !(await page.isVisible('#btnToPhase3')), err);
 
   // Out of MIDI range assignment is refused
@@ -429,6 +444,7 @@ async function main() {
   await page.click('#btnBuild');
   await page.waitForSelector('#buildError.visible', { timeout: 10000 });
   check('build error is shown', true);
+  await shot('4b-build-error');
   check('build button available again for retry', await page.isVisible('#btnBuild'));
 
   // Template folder download reports success

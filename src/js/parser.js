@@ -1,5 +1,8 @@
 /* parser.js — Filename parser following reference/parser-spec.md */
 
+/* Single source for the version shown in the UI and written to exports */
+var SA_VERSION = '1.2.0';
+
 const PARSER_REGEX = /^([^_]+)_([^_]+)_([A-Ga-g])([sb]?)(\d)_v(\d+)_rr(\d+)\.wav$/;
 
 const NOTE_OFFSETS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -13,7 +16,8 @@ function calcMidiNote(note, accidental, octave) {
 
 function parseFilename(filename, fullPath) {
   const match = filename.match(PARSER_REGEX);
-  if (match) {
+  const midi = match ? calcMidiNote(match[3], match[4] || null, match[5]) : null;
+  if (match && midi >= 0 && midi <= 127) {
     const note = match[3].toUpperCase();
     const accidental = match[4] || null;
     const octave = parseInt(match[5]);
@@ -26,7 +30,7 @@ function parseFilename(filename, fullPath) {
       note: note,
       accidental: accidental,
       octave: octave,
-      midiNote: calcMidiNote(note, accidental, octave),
+      midiNote: midi,
       velocityLayer: parseInt(match[6]),
       roundRobin: parseInt(match[7]),
       manualOverride: false,
@@ -100,4 +104,14 @@ function kspSafeText(name) {
 /* Folder a sample is exported into: Samples/<this>/<filename> */
 function articulationFolder(sample) {
   return safePathSegment(sample.articulation, 'Uncategorized');
+}
+
+/* Escape text for insertion into innerHTML (filenames and names are untrusted) */
+function escapeHtml(text) {
+  return String(text == null ? '' : text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

@@ -203,11 +203,7 @@ function renderChatError(msg) {
 
 // ── Simple markdown-lite renderer ──
 
-function escapeHtml(text) {
-  var div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
+/* escapeHtml lives in parser.js */
 
 function renderMarkdownLite(text) {
   // Escape HTML first
