@@ -880,6 +880,8 @@ code, .code-block {
 .config-panel {
   width: 340px;
   flex-shrink: 0;
+  overflow-y: auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -980,6 +982,7 @@ code, .code-block {
    ══════════════════════════════════════════════════════ */
 
 #phase4 {
+  flex-direction: column;
   align-items: center;
   justify-content: flex-start;
   overflow-y: auto;
@@ -987,6 +990,8 @@ code, .code-block {
 }
 
 .export-column {
+  flex-shrink: 0;
+  padding-bottom: 14px;
   width: 100%;
   max-width: 560px;
   display: flex;
@@ -1550,3 +1555,104 @@ code, .code-block {
 .plan-footer {
   margin-top: auto;
 }
+
+/* ── MVP completion: feedback states, focus, compact import ── */
+
+/* Visible keyboard focus everywhere (mouse clicks keep the clean look) */
+:focus-visible {
+  outline: 1px solid rgba(255,255,255,0.45);
+  outline-offset: 2px;
+}
+
+.status-msg {
+  font-size: 11px;
+  color: var(--muted);
+  min-height: 0;
+  overflow-wrap: anywhere;
+}
+.status-msg:empty { display: none; }
+.status-msg.ok { color: var(--ok); }
+.status-msg.error { color: #e06060; }
+
+.guide-card > .status-msg { padding: 0 24px 14px; }
+
+/* After the first import the drop zone shrinks to a one-line re-import bar */
+.drop-zone.compact {
+  min-height: 0;
+  padding: 8px 14px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 10px;
+}
+.drop-zone.compact .drop-zone-icon { font-size: 14px; }
+.drop-zone.compact h3 { font-size: 11px; font-weight: 400; color: var(--muted); }
+.drop-zone.compact h3::after { content: ' to replace, or'; }
+.drop-zone.compact p { display: none; }
+.drop-zone.compact button { margin-left: auto; }
+
+/* Validation: errors red, warnings amber, one line each */
+.validation-warning {
+  flex-direction: column;
+  align-items: stretch;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.validation-warning.is-warning {
+  background: var(--warn-bg);
+  border-color: rgba(201,147,58,0.15);
+}
+.validation-warning .v-warning { color: var(--warn); }
+.validation-warning .v-error { color: #e06060; }
+
+.file-row.unreadable .filename { color: var(--muted); text-decoration: line-through; }
+
+.detail-title {
+  display: block;
+  margin-bottom: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-note { font-size: 11px; color: var(--body); margin-bottom: 6px; overflow-wrap: anywhere; }
+.detail-note.error { color: #e06060; }
+
+/* Controls whose effect is off */
+.control-toggle.unavailable .toggle-label { color: var(--faint); }
+.toggle-need {
+  margin-left: auto;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* Build errors and completion details */
+.build-error {
+  display: none;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(220,50,50,0.15);
+  background: rgba(220,50,50,0.06);
+  color: #e06060;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.build-error.visible { display: block; }
+
+.completion-path {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.completion-actions { flex-wrap: wrap; justify-content: center; }
+
+.step-btn:disabled { cursor: default; }
+
+.badge { white-space: nowrap; }
+.file-list-header { flex-wrap: wrap; gap: 6px; }
+.drop-zone.compact h3, .drop-zone.compact p { margin: 0; }
+.config-panel > * { flex-shrink: 0; }

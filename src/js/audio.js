@@ -25,10 +25,8 @@ async function previewSample(filePath, trimStartTime, trimEndTime) {
   stopPreview();
 
   try {
-    var bytes = await window.__TAURI__.core.invoke('read_file_bytes', { path: filePath });
     var ctx = getAudioContext();
-    var arrayBuffer = new Uint8Array(bytes).buffer;
-    var audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    var audioBuffer = await ctx.decodeAudioData(await readFileBytes(filePath));
 
     var source = ctx.createBufferSource();
     source.buffer = audioBuffer;
@@ -58,10 +56,8 @@ async function playSampleWithVelocity(filePath, velocity, trimStartTime, trimEnd
   stopPreview();
 
   try {
-    var bytes = await window.__TAURI__.core.invoke('read_file_bytes', { path: filePath });
     var ctx = getAudioContext();
-    var arrayBuffer = new Uint8Array(bytes).buffer;
-    var audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    var audioBuffer = await ctx.decodeAudioData(await readFileBytes(filePath));
 
     var source = ctx.createBufferSource();
     source.buffer = audioBuffer;
@@ -94,10 +90,7 @@ async function playSampleWithVelocity(filePath, velocity, trimStartTime, trimEnd
  */
 async function analyzeSampleTrim(filePath) {
   try {
-    var bytes = await window.__TAURI__.core.invoke('read_file_bytes', { path: filePath });
-    var ctx = getAudioContext();
-    var arrayBuffer = new Uint8Array(bytes).buffer;
-    var audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    var audioBuffer = await decodeAtNativeRate(await readFileBytes(filePath));
     return findTrimPoints(audioBuffer);
   } catch (err) {
     console.error('Trim analysis failed for:', filePath, err);

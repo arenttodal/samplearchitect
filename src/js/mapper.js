@@ -69,14 +69,15 @@ function validateSamples(samples) {
 
   var mapped = samples.filter(function(s) { return s.parsed; });
   if (mapped.length === 0) {
-    errors.push('At least 1 sample must be mapped');
-    return { errors: errors, warnings: warnings };
+    errors.push(samples.length === 0
+      ? 'No samples imported yet'
+      : 'No sample is mapped yet — rename files to the convention or assign them manually');
   }
 
-  // Check duplicates
+  // Same note + velocity + round robin + articulation would stack two zones
   var seen = {};
   mapped.forEach(function(s) {
-    var key = s.midiNote + '_v' + s.velocityLayer + '_rr' + s.roundRobin;
+    var key = (s.articulation || '') + '_' + s.midiNote + '_v' + s.velocityLayer + '_rr' + s.roundRobin;
     if (seen[key]) {
       errors.push('Duplicate mapping: ' + s.filename + ' and ' + seen[key]);
     } else {
@@ -84,8 +85,38 @@ function validateSamples(samples) {
     }
   });
 
-  // Check mixed sample rates (we can't read WAV headers in JS easily, so skip for now)
-  // This would need Tauri backend support to read WAV headers
+  // Two files with the same name would overwrite each other in the export
+  var dest = {};
+  mapped.forEach(function(s) {
+    var key = (articulationFolder(s) + '/' + s.filename).toLowerCase();
+    if (dest[key]) {
+      errors.push('Two files would be exported as ' + articulationFolder(s) + '/' + s.filename + ' — rename one');
+    } else {
+      dest[key] = true;
+    }
+  });
+
+  var unreadable = samples.filter(function(s) { return s.unreadable; });
+  if (unreadable.length > 0) {
+    warnings.push(unreadable.length + ' file' + (unreadable.length > 1 ? 's' : '') +
+      ' can\'t be read as WAV and will be skipped: ' + unreadable.map(function(s) { return s.filename; }).join(', '));
+  }
+
+  var rates = {};
+  mapped.forEach(function(s) {
+    if (s.wavInfo) rates[s.wavInfo.sample_rate] = true;
+  });
+  var rateList = Object.keys(rates);
+  if (rateList.length > 1) {
+    warnings.push('Mixed sample rates (' + rateList.map(function(r) { return (r / 1000) + ' kHz'; }).join(', ') +
+      ') — samplers will play them, but consistent rates are recommended');
+  }
+
+  var unmatched = samples.filter(function(s) { return !s.parsed && !s.unreadable; });
+  if (unmatched.length > 0 && mapped.length > 0) {
+    warnings.push(unmatched.length + ' unmatched file' + (unmatched.length > 1 ? 's' : '') +
+      ' will be left out unless you assign ' + (unmatched.length > 1 ? 'them' : 'it'));
+  }
 
   return { errors: errors, warnings: warnings };
 }

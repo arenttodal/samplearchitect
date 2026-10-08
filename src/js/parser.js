@@ -1,5 +1,8 @@
 /* parser.js — Filename parser following reference/parser-spec.md */
 
+/* Single source for the version shown in the UI and written to exports */
+var SA_VERSION = '1.2.0';
+
 const PARSER_REGEX = /^([^_]+)_([^_]+)_([A-Ga-g])([sb]?)(\d)_v(\d+)_rr(\d+)\.wav$/;
 
 const NOTE_OFFSETS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -13,7 +16,8 @@ function calcMidiNote(note, accidental, octave) {
 
 function parseFilename(filename, fullPath) {
   const match = filename.match(PARSER_REGEX);
-  if (match) {
+  const midi = match ? calcMidiNote(match[3], match[4] || null, match[5]) : null;
+  if (match && midi >= 0 && midi <= 127) {
     const note = match[3].toUpperCase();
     const accidental = match[4] || null;
     const octave = parseInt(match[5]);
@@ -26,7 +30,7 @@ function parseFilename(filename, fullPath) {
       note: note,
       accidental: accidental,
       octave: octave,
-      midiNote: calcMidiNote(note, accidental, octave),
+      midiNote: midi,
       velocityLayer: parseInt(match[6]),
       roundRobin: parseInt(match[7]),
       manualOverride: false,
@@ -69,4 +73,45 @@ function getVelocityRange(layer, totalLayers) {
   const low = (layer - 1) * step;
   const high = layer === totalLayers ? 127 : (layer * step) - 1;
   return { low, high };
+}
+
+/* ── Name sanitizing ──
+   Instrument names come from filename tokens or user input and articulations
+   from free text; both end up in file paths, KSP strings and markup. */
+
+var WINDOWS_RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
+
+/* A single path segment that is valid on macOS, Windows and Linux. */
+function safePathSegment(name, fallback) {
+  var s = String(name == null ? '' : name)
+    .replace(/[\u0000-\u001f<>:"\/\\|?*]/g, '_')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s.]+|[\s.]+$/g, '')
+    .slice(0, 64)
+    .replace(/[\s.]+$/, '');
+  if (!s || /^_+$/.test(s) || WINDOWS_RESERVED.test(s)) return fallback || 'Untitled';
+  return s;
+}
+
+/* Text safe inside a KSP string literal and a { } comment. */
+function kspSafeText(name) {
+  return String(name == null ? '' : name)
+    .replace(/["{}\u0000-\u001f]/g, '')
+    .trim()
+    .slice(0, 64);
+}
+
+/* Folder a sample is exported into: Samples/<this>/<filename> */
+function articulationFolder(sample) {
+  return safePathSegment(sample.articulation, 'Uncategorized');
+}
+
+/* Escape text for insertion into innerHTML (filenames and names are untrusted) */
+function escapeHtml(text) {
+  return String(text == null ? '' : text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

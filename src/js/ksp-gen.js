@@ -63,7 +63,7 @@ var KNOB_DEFAULTS = {
 function generateKSP(samples, stats, config, positions, customUiHeight) {
   var lines = [];
   var mapped = samples.filter(function(s) { return s.parsed; });
-  var instrumentName = stats.instrument || 'Instrument';
+  var instrumentName = kspSafeText(stats.instrument) || 'Instrument';
   var maxRR = stats.maxRoundRobins;
 
   var enabledControls = getEnabledControls();
@@ -184,10 +184,12 @@ function generateKSP(samples, stats, config, positions, customUiHeight) {
   }
 
   // Round robin counter declaration (inside on init)
+  // KSP only allows declarations in on init, so the loop index lives here too
   if (maxRR > 1) {
     lines.push('');
-    lines.push('  { Round Robin }');
+    lines.push('  { Round Robin: expects one group per round robin, rr1 = group 1 }');
     lines.push('  declare $rr_counter');
+    lines.push('  declare $g');
     lines.push('  $rr_counter := 0');
   }
 
@@ -243,18 +245,20 @@ function generateKSP(samples, stats, config, positions, customUiHeight) {
     lines.push('');
     lines.push('');
     lines.push('on note');
-    lines.push('  $rr_counter := ($rr_counter + 1) mod ' + maxRR);
-    lines.push('  ');
-    lines.push('  declare $g');
-    lines.push('  $g := 0');
-    lines.push('  while ($g < ' + maxRR + ')');
-    lines.push('    if ($g = $rr_counter)');
-    lines.push('      allow_group($g)');
-    lines.push('    else');
-    lines.push('      disallow_group($g)');
-    lines.push('    end if');
-    lines.push('    $g := $g + 1');
-    lines.push('  end while');
+    // Only cycle when the instrument has exactly one group per round robin;
+    // otherwise disallowing groups would silence notes.
+    lines.push('  if ($NUM_GROUPS = ' + maxRR + ')');
+    lines.push('    $rr_counter := ($rr_counter + 1) mod ' + maxRR);
+    lines.push('    $g := 0');
+    lines.push('    while ($g < ' + maxRR + ')');
+    lines.push('      if ($g = $rr_counter)');
+    lines.push('        allow_group($g)');
+    lines.push('      else');
+    lines.push('        disallow_group($g)');
+    lines.push('      end if');
+    lines.push('      $g := $g + 1');
+    lines.push('    end while');
+    lines.push('  end if');
     lines.push('end on');
   }
 

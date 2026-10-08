@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SampleArchitect</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -32,7 +33,7 @@
         </div>
       </div>
       <div class="top-bar-right">
-        <button class="settings-btn" id="btnSettings" title="Settings">
+        <button class="settings-btn" id="btnSettings" title="Settings" aria-label="Settings">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
         <span id="projectName">New Project</span>
@@ -47,7 +48,7 @@
 
         <!-- No API key banner (shown when no key configured) -->
         <div class="no-key-banner" id="noKeyBanner" style="display:none;">
-          Add your Anthropic API key in Settings (gear icon) to unlock the AI sampling assistant.
+          Optional: add an Anthropic API key in Settings (gear icon) for an AI recording-plan assistant. Everything else works offline.
         </div>
 
         <!-- Chat mode (left panel — shown when API key configured) -->
@@ -117,9 +118,10 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
 
           </div>
           <div class="guide-footer">
-            <button class="btn-secondary" id="btnDownloadTemplate">Download Template Folders</button>
+            <button class="btn-secondary" id="btnDownloadTemplate">Create Template Folders</button>
             <button class="btn-primary large" id="btnReady">I'm Ready — Import Samples</button>
           </div>
+          <div class="status-msg" id="templateStatus" role="status"></div>
         </div>
       </div>
 
@@ -135,8 +137,8 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
             <button class="btn-secondary btn-sm" id="btnAcceptAllTrims">Accept All Trims</button>
             <button class="btn-secondary btn-sm" id="btnRejectAllTrims">Reject All Trims</button>
           </div>
-          <div class="validation-warning hidden" id="validationWarning"></div>
-          <div class="file-list-scroll" id="fileListScroll"></div>
+          <div class="validation-warning hidden" id="validationWarning" role="alert"></div>
+          <div class="file-list-scroll" id="fileListScroll" role="listbox" aria-label="Samples"></div>
         </div>
 
         <!-- Right panel -->
@@ -149,10 +151,12 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
 
           <!-- Drop zone -->
           <div class="drop-zone" id="dropZone">
-            <div class="drop-zone-icon">&#8615;</div>
+            <div class="drop-zone-icon" aria-hidden="true">&#8615;</div>
             <h3>Drop a sample folder here</h3>
-            <p>Drag a folder containing your named .wav files</p>
+            <p>Drag a folder containing your named .wav files, or</p>
+            <button class="btn-secondary btn-sm" id="btnChooseFolder">Choose Folder&hellip;</button>
           </div>
+          <div class="status-msg" id="importStatus" role="status" aria-live="polite"></div>
 
           <!-- Keyboard mapper -->
           <div class="keyboard-container" id="keyboardContainer" style="display:none;">
@@ -235,15 +239,18 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
                 </div>
                 <div class="progress-label" id="progressLabel">Preparing...</div>
               </div>
+              <div class="build-error" id="buildError" role="alert"></div>
               <div class="completion" id="completion">
                 <div class="completion-check">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
                 <h3>Build Complete</h3>
+                <div class="completion-path" id="completionPath"></div>
                 <div class="completion-actions">
                   <button class="btn-primary btn-copy-script" id="btnCopyScript">Copy Script to Clipboard</button>
                   <button class="btn-secondary" id="btnOpenFolder">Open Export Folder</button>
                   <button class="btn-secondary" id="btnViewGuide">View Setup Guide</button>
+                  <button class="btn-secondary" id="btnBuildAgain">Build Again</button>
                 </div>
               </div>
             </div>
@@ -258,7 +265,7 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
       <div class="card settings-dialog">
         <div class="settings-header">
           <span class="label-lg">SETTINGS</span>
-          <button class="btn-secondary btn-sm" id="settingsClose">&times;</button>
+          <button class="btn-secondary btn-sm" id="settingsClose" aria-label="Close settings">&times;</button>
         </div>
         <div class="settings-body">
           <div class="settings-section">
@@ -273,7 +280,7 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
               <button class="btn-secondary btn-sm" id="settingsTestKey">Test Connection</button>
               <span class="settings-key-status" id="settingsKeyStatus">Not configured</span>
             </div>
-            <p class="settings-hint">Get your API key at <strong>console.anthropic.com</strong></p>
+            <p class="settings-hint">Optional. Get a key at <strong>console.anthropic.com</strong>. The key is stored only on this computer and is sent only to Anthropic when you use the assistant.</p>
           </div>
         </div>
         <div class="settings-footer">
@@ -285,7 +292,7 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
 
     <!-- ── Bottom Bar ── -->
     <div class="bottom-bar">
-      <span>SampleArchitect v1.2</span>
+      <span id="appVersion">SampleArchitect</span>
       <span>Kontakt 6+ / Decent Sampler</span>
       <span class="midi-status" id="midiStatus"><span class="midi-dot"></span>MIDI: No device</span>
       <span>by Evenant</span>
@@ -293,6 +300,7 @@ Guitar_Fingerpick_A3_v1_rr1.wav</div>
 
   </div>
 
+  <script src="js/ipc.js"></script>
   <script src="js/parser.js"></script>
   <script src="js/mapper.js"></script>
   <script src="js/keyboard.js"></script>

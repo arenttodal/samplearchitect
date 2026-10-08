@@ -6,18 +6,48 @@ var state = {
   completedPhases: [],
   samples: [],
   selectedSampleIndex: -1,
+  editingSampleIndex: -1,
   instrumentName: 'My Instrument',
   outputPath: null,
   recordingPlan: null,
   layoutBuilder: null,
   previewBuilder: null,
   knobPositions: null,
-  uiHeight: null
+  uiHeight: null,
+  importing: false,
+  building: false
 };
+
+// ── Small UI helpers ──
+function setStatus(el, text, kind) {
+  if (typeof el === 'string') el = document.getElementById(el);
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'status-msg' + (kind ? ' ' + kind : '');
+}
+
+function errText(err) {
+  return String(err && err.message ? err.message : err);
+}
+
+/* Make a div behave as an accessible checkbox */
+function makeCheckable(el, checked, onToggle) {
+  el.setAttribute('role', 'checkbox');
+  el.setAttribute('tabindex', '0');
+  el.setAttribute('aria-checked', checked ? 'true' : 'false');
+  el.addEventListener('click', onToggle);
+  el.addEventListener('keydown', function(e) {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      onToggle();
+    }
+  });
+}
 
 // ── Phase Navigation ──
 function goToPhase(phase) {
   if (phase < 1 || phase > 4) return;
+  if (state.building) return; // the build owns the screen until it finishes
   if (phase > 1 && state.completedPhases.indexOf(phase - 1) === -1 && phase !== state.currentPhase) return;
 
   state.currentPhase = phase;
@@ -28,28 +58,41 @@ function goToPhase(phase) {
   });
   document.getElementById('phase' + phase).classList.add('active');
 
-  // Update step nav buttons
-  document.querySelectorAll('.step-btn').forEach(function(btn) {
-    var step = parseInt(btn.dataset.step);
-    btn.classList.remove('active', 'completed', 'disabled');
-    if (step === phase) {
-      btn.classList.add('active');
-    } else if (state.completedPhases.indexOf(step) !== -1) {
-      btn.classList.add('completed');
-    } else if (step > phase && state.completedPhases.indexOf(step - 1) === -1) {
-      btn.classList.add('disabled');
-    }
-  });
+  renderStepNav();
 
   // Phase-specific init
   if (phase === 3) renderPhase3();
   if (phase === 4) renderPhase4();
 }
 
+function renderStepNav() {
+  var phase = state.currentPhase;
+  document.querySelectorAll('.step-btn').forEach(function(btn) {
+    var step = parseInt(btn.dataset.step);
+    btn.classList.remove('active', 'completed', 'disabled');
+    var reachable = step === 1 || step === phase || state.completedPhases.indexOf(step - 1) !== -1;
+    if (step === phase) {
+      btn.classList.add('active');
+      btn.setAttribute('aria-current', 'step');
+    } else {
+      btn.removeAttribute('aria-current');
+      if (state.completedPhases.indexOf(step) !== -1) btn.classList.add('completed');
+      if (!reachable) btn.classList.add('disabled');
+    }
+    btn.disabled = !reachable;
+  });
+}
+
 function completePhase(phase) {
   if (state.completedPhases.indexOf(phase) === -1) {
     state.completedPhases.push(phase);
   }
+}
+
+/* Later steps must be revisited when earlier input becomes invalid */
+function uncompleteFrom(phase) {
+  state.completedPhases = state.completedPhases.filter(function(p) { return p < phase; });
+  renderStepNav();
 }
 
 // ── Phase 1 Setup ──
@@ -60,22 +103,23 @@ function initPhase1() {
   });
 
   document.getElementById('btnDownloadTemplate').addEventListener('click', async function() {
+    var status = document.getElementById('templateStatus');
     try {
       var result = await window.__TAURI__.dialog.save({
         title: 'Choose location for template folders',
         defaultPath: 'MySamples'
       });
-      if (result) {
-        var folders = ['Plucked', 'Strummed', 'Harmonics', 'Sustain'];
-        for (var i = 0; i < folders.length; i++) {
-          await window.__TAURI__.core.invoke('create_directory', {
-            path: result + '/' + folders[i]
-          });
-        }
-        console.log('Template folders created at:', result);
+      if (!result) return;
+      var folders = ['Plucked', 'Strummed', 'Harmonics', 'Sustain'];
+      for (var i = 0; i < folders.length; i++) {
+        await window.__TAURI__.core.invoke('create_directory', {
+          path: result + '/' + folders[i]
+        });
       }
+      setStatus(status, 'Template folders created in ' + result, 'ok');
     } catch (err) {
       console.error('Template folder creation failed:', err);
+      setStatus(status, 'Could not create the folders: ' + errText(err), 'error');
     }
   });
 }
@@ -84,109 +128,162 @@ function initPhase1() {
 function initPhase2() {
   var dropZone = document.getElementById('dropZone');
 
-  // Listen for Tauri file drop events
+  // Tauri delivers dropped paths through this event, wherever the drop lands.
+  // Only Phase 2 imports; elsewhere a drop would silently replace the samples.
   if (window.__TAURI__ && window.__TAURI__.event) {
     window.__TAURI__.event.listen('tauri://drag-drop', function(event) {
-      var paths = event.payload.paths || [];
-      if (paths.length > 0) {
-        handleFileDrop(paths[0]);
-      }
+      dropZone.classList.remove('drag-over');
+      var paths = (event.payload && event.payload.paths) || [];
+      if (paths.length === 0 || state.currentPhase !== 2) return;
+      handleFileDrop(paths[0]);
+    });
+    window.__TAURI__.event.listen('tauri://drag-enter', function() {
+      if (state.currentPhase === 2) dropZone.classList.add('drag-over');
+    });
+    window.__TAURI__.event.listen('tauri://drag-leave', function() {
+      dropZone.classList.remove('drag-over');
     });
   }
 
-  // Also handle native HTML drag/drop as fallback display
+  // Native HTML drag/drop only drives the hover style
   dropZone.addEventListener('dragover', function(e) {
     e.preventDefault();
     dropZone.classList.add('drag-over');
   });
-
   dropZone.addEventListener('dragleave', function() {
     dropZone.classList.remove('drag-over');
   });
-
   dropZone.addEventListener('drop', function(e) {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
-    // The Tauri event handler above will process the actual file paths
   });
+
+  document.getElementById('btnChooseFolder').addEventListener('click', chooseFolder);
+}
+
+async function chooseFolder() {
+  try {
+    var dir = await window.__TAURI__.dialog.open({
+      title: 'Choose your sample folder',
+      directory: true,
+      multiple: false
+    });
+    if (dir) handleFileDrop(Array.isArray(dir) ? dir[0] : dir);
+  } catch (err) {
+    setStatus('importStatus', 'Could not open the folder picker: ' + errText(err), 'error');
+  }
 }
 
 async function handleFileDrop(dirPath) {
+  if (state.importing) return;
+  state.importing = true;
+  setStatus('importStatus', 'Reading ' + dirPath + '…');
+
   try {
     var filePaths = await window.__TAURI__.core.invoke('read_dir_recursive', { path: dirPath });
 
-    state.samples = [];
-    filePaths.forEach(function(fp) {
-      var filename = fp.split('/').pop().split('\\').pop();
-      var parsed = parseFilename(filename, fp);
-      state.samples.push(parsed);
-    });
+    if (filePaths.length === 0) {
+      setStatus('importStatus',
+        'No .wav files found in ' + dirPath + '. Drop the folder that contains your samples (subfolders are included).',
+        'error');
+      return;
+    }
 
-    if (state.samples.length === 0) return;
+    var samples = filePaths.map(function(fp) {
+      var filename = fp.split('/').pop().split('\\').pop();
+      return parseFilename(filename, fp);
+    });
+    samples.sort(function(a, b) { return a.path.localeCompare(b.path); });
+
+    // Read headers so unreadable files and mixed sample rates are caught now,
+    // not when a sampler refuses the export.
+    for (var i = 0; i < samples.length; i++) {
+      try {
+        samples[i].wavInfo = await window.__TAURI__.core.invoke('read_wav_info', { path: samples[i].path });
+      } catch (err) {
+        samples[i].unreadable = errText(err);
+        samples[i].parsed = false;
+      }
+    }
+
+    state.samples = samples;
+    state.selectedSampleIndex = -1;
+    state.editingSampleIndex = -1;
+    uncompleteFrom(2);
 
     // Auto-detect instrument name: recording plan > first parsed sample > folder name
-    if (state.recordingPlan && state.recordingPlan.instrument) {
+    if (state.recordingPlan && state.recordingPlan.instrument && state.recordingPlan.instrument !== 'My Instrument') {
       state.instrumentName = state.recordingPlan.instrument;
     } else {
       var firstMatched = state.samples.find(function(s) { return s.parsed; });
       if (firstMatched && firstMatched.instrument) {
         state.instrumentName = firstMatched.instrument;
       } else {
-        // Fall back to parent folder name
         var parts = dirPath.replace(/\\/g, '/').replace(/\/$/, '').split('/');
         state.instrumentName = parts[parts.length - 1] || 'My Instrument';
       }
     }
     document.getElementById('projectName').textContent = state.instrumentName + ' Project';
 
-    // Show and populate instrument name field
-    var nameBar = document.getElementById('instrumentNameBar');
-    nameBar.style.display = '';
-    var nameInput = document.getElementById('instrumentNameInput');
-    nameInput.value = state.instrumentName;
+    document.getElementById('instrumentNameBar').style.display = '';
+    document.getElementById('instrumentNameInput').value = state.instrumentName;
 
-    // Assign key ranges and velocity ranges
     assignKeyRanges(state.samples);
     assignVelocityRanges(state.samples);
 
-    // Render immediately (no auto-trim — user triggers trim manually)
     renderFileList();
     renderKeyboardView();
+    renderSampleDetail();
     updateValidation();
 
-    // Hide drop zone
-    document.getElementById('dropZone').classList.add('hidden');
+    // Collapse the drop zone; the folder button stays available for re-import
+    document.getElementById('dropZone').classList.add('compact');
     document.getElementById('keyboardContainer').style.display = '';
-
+    setStatus('importStatus', 'Imported ' + samples.length + ' file' + (samples.length === 1 ? '' : 's') + ' from ' + dirPath, 'ok');
   } catch (err) {
     console.error('File drop handling failed:', err);
+    setStatus('importStatus', 'Could not read ' + dirPath + ': ' + errText(err), 'error');
+  } finally {
+    state.importing = false;
   }
 }
 
 // ── Per-sample trim (manual) ──
 async function trimSingleSample(index) {
   var s = state.samples[index];
-  if (!s) return;
+  if (!s || s.unreadable) return;
 
-  try {
-    var trim = await analyzeSampleTrim(s.path);
-    if (!trim) return;
-
-    s.trimStart = trim.startTime;
-    s.trimEnd = trim.endTime;
-    s.trimStartSample = trim.startSample;
-    s.trimEndSample = trim.endSample;
-    s.silenceRemoved = trim.silenceRemoved;
-    s.trimSignificant = trim.significant;
-    s.trimApproved = false; // analyzed but not yet approved
-
-    // Select this sample and show trim confirmation in detail panel
-    state.selectedSampleIndex = index;
-    renderFileList();
-    renderTrimConfirm(index);
-  } catch (err) {
-    console.error('Trim analysis failed for', s.filename, err);
+  var trim = await analyzeSampleTrim(s.path);
+  if (!trim) {
+    setStatus('importStatus', 'Could not analyze ' + s.filename + ' for silence', 'error');
+    return;
   }
+  applyTrimAnalysis(s, trim);
+  s.trimApproved = false; // analyzed but not yet approved
+
+  // Select this sample and show trim confirmation in detail panel
+  state.selectedSampleIndex = index;
+  renderFileList();
+  renderTrimConfirm(index);
+}
+
+function applyTrimAnalysis(s, trim) {
+  s.trimStart = trim.startTime;
+  s.trimEnd = trim.endTime;
+  s.trimStartSample = trim.startSample;
+  s.trimEndSample = trim.endSample;
+  s.silenceRemoved = trim.silenceRemoved;
+  s.trimSignificant = trim.significant;
+}
+
+function clearTrim(s) {
+  s.trimStart = undefined;
+  s.trimEnd = undefined;
+  s.trimStartSample = undefined;
+  s.trimEndSample = undefined;
+  s.silenceRemoved = undefined;
+  s.trimSignificant = undefined;
+  s.trimApproved = false;
 }
 
 function approveTrim(index) {
@@ -200,13 +297,7 @@ function approveTrim(index) {
 function rejectTrim(index) {
   var s = state.samples[index];
   if (!s) return;
-  s.trimStart = undefined;
-  s.trimEnd = undefined;
-  s.trimStartSample = undefined;
-  s.trimEndSample = undefined;
-  s.silenceRemoved = undefined;
-  s.trimSignificant = undefined;
-  s.trimApproved = false;
+  clearTrim(s);
   renderFileList();
   renderSampleDetail();
 }
@@ -220,7 +311,7 @@ function renderTrimConfirm(index) {
 
   container.innerHTML =
     '<div class="inner-panel">' +
-    '<span class="label-lg" style="display:block;margin-bottom:12px;">TRIM PREVIEW</span>' +
+    '<span class="label-lg" style="display:block;margin-bottom:12px;">TRIM PREVIEW — ' + escapeHtml(s.filename) + '</span>' +
     '<div class="trim-preview-info">' +
     '<div class="detail-grid">' +
     '<div class="detail-item"><span class="label">LEADING SILENCE</span><div class="value">' + removed + 's</div></div>' +
@@ -257,65 +348,51 @@ function renderTrimConfirm(index) {
 // ── Accept All Trims (single click, no dialog) ──
 async function acceptAllTrims() {
   var btn = document.getElementById('btnAcceptAllTrims');
-  btn.textContent = 'Analyzing\u2026';
+  btn.textContent = 'Analyzing…';
   btn.disabled = true;
 
   var accepted = 0;
-  for (var i = 0; i < state.samples.length; i++) {
-    var s = state.samples[i];
+  var failedNames = [];
+  try {
+    for (var i = 0; i < state.samples.length; i++) {
+      var s = state.samples[i];
+      if (s.trimApproved || s.unreadable) continue;
 
-    // Skip already-approved samples
-    if (s.trimApproved) continue;
-
-    // Analyze if not yet analyzed
-    if (s.trimStart == null) {
-      try {
+      if (s.trimStart == null) {
         var trim = await analyzeSampleTrim(s.path);
-        if (trim) {
-          s.trimStart = trim.startTime;
-          s.trimEnd = trim.endTime;
-          s.trimStartSample = trim.startSample;
-          s.trimEndSample = trim.endSample;
-          s.silenceRemoved = trim.silenceRemoved;
-          s.trimSignificant = trim.significant;
+        if (!trim) {
+          failedNames.push(s.filename);
+          continue;
         }
-      } catch (err) {
-        console.error('Trim analysis failed for', s.filename, err);
-        continue;
+        applyTrimAnalysis(s, trim);
+      }
+
+      // Approve only if there's actually silence to trim
+      if (s.silenceRemoved != null && s.silenceRemoved > 0.01) {
+        s.trimApproved = true;
+        accepted++;
       }
     }
-
-    // Approve only if there's actually silence to trim
-    if (s.silenceRemoved != null && s.silenceRemoved > 0.01) {
-      s.trimApproved = true;
-      accepted++;
-    }
-  }
-
-  btn.textContent = 'Accept All Trims';
-  btn.disabled = false;
-  renderFileList();
-  console.log('Accept All Trims: ' + accepted + ' samples approved');
-}
-
-function rejectAllTrims() {
-  var rejected = 0;
-  for (var i = 0; i < state.samples.length; i++) {
-    var s = state.samples[i];
-    if (s.trimApproved || s.trimStart != null) {
-      s.trimStart = undefined;
-      s.trimEnd = undefined;
-      s.trimStartSample = undefined;
-      s.trimEndSample = undefined;
-      s.silenceRemoved = undefined;
-      s.trimSignificant = undefined;
-      s.trimApproved = false;
-      rejected++;
-    }
+  } finally {
+    btn.textContent = 'Accept All Trims';
+    btn.disabled = false;
   }
   renderFileList();
   renderSampleDetail();
-  console.log('Reject All Trims: ' + rejected + ' samples reset');
+  if (failedNames.length > 0) {
+    setStatus('importStatus', 'Could not analyze: ' + failedNames.join(', '), 'error');
+  } else {
+    setStatus('importStatus', accepted === 0
+      ? 'No leading silence to trim'
+      : 'Trimmed leading silence on ' + accepted + ' sample' + (accepted === 1 ? '' : 's'), 'ok');
+  }
+}
+
+function rejectAllTrims() {
+  state.samples.forEach(clearTrim);
+  renderFileList();
+  renderSampleDetail();
+  setStatus('importStatus', 'All trims removed', 'ok');
 }
 
 function renderFileList() {
@@ -323,37 +400,44 @@ function renderFileList() {
   scroll.innerHTML = '';
 
   var matched = state.samples.filter(function(s) { return s.parsed; }).length;
-  var unmatched = state.samples.length - matched;
+  var unreadable = state.samples.filter(function(s) { return s.unreadable; }).length;
+  var unmatched = state.samples.length - matched - unreadable;
 
   // Badges
   var badges = document.getElementById('fileBadges');
   badges.innerHTML = '';
-  if (matched > 0) {
+  function badge(cls, text) {
     var b = document.createElement('span');
-    b.className = 'badge ok';
-    b.textContent = matched + ' matched';
+    b.className = 'badge ' + cls;
+    b.textContent = text;
     badges.appendChild(b);
   }
-  if (unmatched > 0) {
-    var b2 = document.createElement('span');
-    b2.className = 'badge warn';
-    b2.textContent = unmatched + ' unmatched';
-    badges.appendChild(b2);
+  if (matched > 0) badge('ok', matched + ' matched');
+  if (unmatched > 0) badge('warn', unmatched + ' unmatched');
+  if (unreadable > 0) badge('warn', unreadable + ' unreadable');
+
+  document.getElementById('fileListToolbar').style.display = state.samples.length > 0 ? '' : 'none';
+
+  if (state.samples.length === 0) {
+    var empty = document.createElement('div');
+    empty.className = 'detail-empty';
+    empty.textContent = 'No samples yet';
+    scroll.appendChild(empty);
+    return;
   }
 
-  // File rows
   state.samples.forEach(function(sample, index) {
     var row = document.createElement('div');
     row.className = 'file-row';
+    row.setAttribute('role', 'option');
+    row.setAttribute('tabindex', '0');
+    row.setAttribute('aria-selected', index === state.selectedSampleIndex ? 'true' : 'false');
+    row.title = sample.unreadable ? sample.filename + ' — ' + sample.unreadable : sample.filename;
     if (index === state.selectedSampleIndex) row.classList.add('selected');
+    if (sample.unreadable) row.classList.add('unreadable');
 
-    // Dot color: green if parsed (and trim approved or no trim needed), amber otherwise
     var dot = document.createElement('div');
-    if (sample.parsed) {
-      dot.className = 'dot ok';
-    } else {
-      dot.className = 'dot warn';
-    }
+    dot.className = sample.parsed ? 'dot ok' : 'dot warn';
 
     var fname = document.createElement('span');
     fname.className = 'filename';
@@ -362,35 +446,47 @@ function renderFileList() {
     row.appendChild(dot);
     row.appendChild(fname);
 
-    // Show trim status tag if trim was analyzed
     if (sample.trimApproved && sample.silenceRemoved > 0.01) {
       var trimTag = document.createElement('span');
       trimTag.className = 'trim-tag approved';
-      trimTag.textContent = '\u2212' + sample.silenceRemoved.toFixed(1) + 's';
+      trimTag.textContent = '−' + sample.silenceRemoved.toFixed(1) + 's';
       row.appendChild(trimTag);
     }
 
-    // Per-sample Trim button
-    var trimBtn = document.createElement('button');
-    trimBtn.className = 'btn-trim';
-    trimBtn.textContent = sample.trimApproved ? '\u2713' : 'Trim';
-    if (sample.trimApproved) trimBtn.classList.add('approved');
-    trimBtn.addEventListener('click', (function(idx) {
-      return function(e) {
+    if (!sample.unreadable) {
+      var trimBtn = document.createElement('button');
+      trimBtn.className = 'btn-trim';
+      trimBtn.textContent = sample.trimApproved ? '✓' : 'Trim';
+      trimBtn.title = 'Detect and remove leading silence';
+      if (sample.trimApproved) trimBtn.classList.add('approved');
+      trimBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        trimSingleSample(idx);
-      };
-    })(index));
-    row.appendChild(trimBtn);
+        trimSingleSample(index);
+      });
+      row.appendChild(trimBtn);
+    }
 
     var pitch = document.createElement('span');
     pitch.className = 'pitch-label';
-    pitch.textContent = sample.parsed ? formatNoteName(sample.note, sample.accidental, sample.octave) : '?';
-
+    pitch.textContent = sample.parsed ? formatNoteName(sample.note, sample.accidental, sample.octave) : (sample.unreadable ? '✕' : '?');
     row.appendChild(pitch);
 
     row.addEventListener('click', function() {
       selectSample(index);
+    });
+    row.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        selectSample(index);
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        var next = index + (e.key === 'ArrowDown' ? 1 : -1);
+        if (next >= 0 && next < state.samples.length) {
+          selectSample(next);
+          var rows = document.querySelectorAll('.file-row');
+          if (rows[next]) rows[next].focus();
+        }
+      }
     });
 
     scroll.appendChild(row);
@@ -399,9 +495,8 @@ function renderFileList() {
 
 function selectSample(index) {
   state.selectedSampleIndex = index;
-  // Re-render file list to update selection highlight
+  state.editingSampleIndex = -1;
   renderFileList();
-  // Render detail panel — wrapped in try/catch to never corrupt file list
   try {
     renderSampleDetail();
   } catch (err) {
@@ -413,90 +508,147 @@ function selectSample(index) {
   }
 }
 
+function formatWavInfo(info) {
+  if (!info) return '—';
+  return (info.sample_rate / 1000) + ' kHz · ' + info.bits_per_sample + '-bit · ' +
+    (info.channels === 1 ? 'mono' : info.channels === 2 ? 'stereo' : info.channels + ' ch') +
+    ' · ' + info.duration_secs.toFixed(2) + 's';
+}
+
 function renderSampleDetail() {
   var container = document.getElementById('sampleDetail');
   var sample = state.samples[state.selectedSampleIndex];
 
   if (!sample) {
-    container.innerHTML = '<div class="detail-empty">Select a sample to view details</div>';
+    container.innerHTML = '<div class="detail-empty">' +
+      (state.samples.length ? 'Select a sample to view details' : 'Import a folder to see your samples here') +
+      '</div>';
     return;
   }
 
-  if (sample.parsed) {
-    var keyRange = (sample.lowKey != null && sample.highKey != null) ? (sample.lowKey + '\u2013' + sample.highKey) : '\u2014';
-    var trimInfo = '\u2014';
+  if (sample.unreadable) {
+    container.innerHTML =
+      '<div class="inner-panel">' +
+      '<span class="label-lg" style="display:block;margin-bottom:12px;">' + escapeHtml(sample.filename) + '</span>' +
+      '<p class="detail-note error">This file can’t be read as a WAV file and will be left out of the export.</p>' +
+      '<p class="detail-note">' + escapeHtml(sample.unreadable) + '</p>' +
+      '</div>';
+    return;
+  }
+
+  if (sample.parsed && state.editingSampleIndex !== state.selectedSampleIndex) {
+    var keyRange = (sample.lowKey != null && sample.highKey != null)
+      ? midiToNoteName(sample.lowKey) + '–' + midiToNoteName(sample.highKey)
+      : '—';
+    var velRange = (sample.velLow != null) ? sample.velLow + '–' + sample.velHigh : '—';
+    var trimInfo = '—';
     if (sample.trimApproved && sample.silenceRemoved > 0.01) {
-      trimInfo = '\u2212' + sample.silenceRemoved.toFixed(2) + 's (approved)';
+      trimInfo = '−' + sample.silenceRemoved.toFixed(2) + 's (approved)';
     } else if (sample.silenceRemoved != null && sample.silenceRemoved > 0.01) {
-      trimInfo = '\u2212' + sample.silenceRemoved.toFixed(2) + 's (pending)';
+      trimInfo = '−' + sample.silenceRemoved.toFixed(2) + 's (pending)';
     } else if (sample.silenceRemoved != null) {
       trimInfo = 'Clean';
     }
     container.innerHTML =
       '<div class="inner-panel">' +
+      '<span class="label-lg detail-title">' + escapeHtml(sample.filename) + (sample.manualOverride ? ' · MANUAL' : '') + '</span>' +
       '<div class="detail-grid">' +
       '<div class="detail-item"><span class="label">NOTE</span><div class="value">' + formatNoteName(sample.note, sample.accidental, sample.octave) + '</div></div>' +
-      '<div class="detail-item"><span class="label">MIDI</span><div class="value">' + (sample.midiNote != null ? sample.midiNote : '\u2014') + '</div></div>' +
-      '<div class="detail-item"><span class="label">VELOCITY</span><div class="value">' + (sample.velocityLayer || '\u2014') + '</div></div>' +
-      '<div class="detail-item"><span class="label">ARTICULATION</span><div class="value">' + (sample.articulation || '\u2014') + '</div></div>' +
-      '<div class="detail-item"><span class="label">ROUND ROBIN</span><div class="value">' + (sample.roundRobin || '\u2014') + '</div></div>' +
+      '<div class="detail-item"><span class="label">MIDI</span><div class="value">' + sample.midiNote + '</div></div>' +
+      '<div class="detail-item"><span class="label">VELOCITY</span><div class="value">v' + sample.velocityLayer + ' (' + velRange + ')</div></div>' +
+      '<div class="detail-item"><span class="label">ARTICULATION</span><div class="value">' + escapeHtml(sample.articulation || '—') + '</div></div>' +
+      '<div class="detail-item"><span class="label">ROUND ROBIN</span><div class="value">' + sample.roundRobin + '</div></div>' +
       '<div class="detail-item"><span class="label">KEY RANGE</span><div class="value">' + keyRange + '</div></div>' +
       '<div class="detail-item"><span class="label">TRIM</span><div class="value">' + trimInfo + '</div></div>' +
+      '<div class="detail-item"><span class="label">FORMAT</span><div class="value">' + formatWavInfo(sample.wavInfo) + '</div></div>' +
       '</div>' +
       '<div class="detail-actions">' +
       '<button class="btn-secondary" id="btnPreview">Preview</button>' +
+      (sample.manualOverride ? '<button class="btn-secondary" id="btnEditAssign">Edit Mapping</button>' : '') +
       '</div>' +
       '</div>';
 
     document.getElementById('btnPreview').addEventListener('click', function() {
-      // Only use trim points for preview if trim was approved
       if (sample.trimApproved) {
         previewSample(sample.path, sample.trimStart, sample.trimEnd);
       } else {
         previewSample(sample.path);
       }
     });
-  } else {
-    // Unmatched: show assignment form
-    container.innerHTML =
-      '<div class="inner-panel">' +
-      '<span class="label-lg" style="display:block;margin-bottom:12px;">MANUAL ASSIGNMENT</span>' +
-      '<div class="assign-form">' +
-      '<div class="form-group"><label>Note</label><select id="assignNote">' +
-      '<option>C</option><option>D</option><option>E</option><option>F</option><option>G</option><option>A</option><option>B</option>' +
-      '</select></div>' +
-      '<div class="form-group"><label>Accidental</label><select id="assignAcc">' +
-      '<option value="">Natural</option><option value="s">Sharp</option><option value="b">Flat</option>' +
-      '</select></div>' +
-      '<div class="form-group"><label>Octave</label><select id="assignOctave">' +
-      '<option>0</option><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option>' +
-      '</select></div>' +
-      '<div class="form-group"><label>Velocity</label><select id="assignVel">' +
-      '<option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>' +
-      '</select></div>' +
-      '<div class="form-group"><label>Articulation</label><input type="text" id="assignArt" placeholder="e.g. Plucked"></div>' +
-      '<div class="form-group"><label>Round Robin</label><select id="assignRR">' +
-      '<option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>' +
-      '</select></div>' +
-      '</div>' +
-      '<div class="detail-actions">' +
-      '<button class="btn-primary" id="btnApplyAssign">Apply</button>' +
-      '<button class="btn-secondary" id="btnPreviewUnmatched">Preview</button>' +
-      '</div>' +
-      '</div>';
+    if (sample.manualOverride) {
+      document.getElementById('btnEditAssign').addEventListener('click', function() {
+        state.editingSampleIndex = state.selectedSampleIndex;
+        renderSampleDetail();
+      });
+    }
+    return;
+  }
 
-    document.getElementById('btnApplyAssign').addEventListener('click', function() {
-      applyManualAssignment(state.selectedSampleIndex);
-    });
+  // Unmatched (or editing a manual assignment): show assignment form
+  var cur = sample.parsed ? sample : null;
+  function opts(values, selected, labels) {
+    return values.map(function(v, i) {
+      return '<option value="' + v + '"' + (String(v) === String(selected) ? ' selected' : '') + '>' + (labels ? labels[i] : v) + '</option>';
+    }).join('');
+  }
+  container.innerHTML =
+    '<div class="inner-panel">' +
+    '<span class="label-lg detail-title">MANUAL ASSIGNMENT — ' + escapeHtml(sample.filename) + '</span>' +
+    '<div class="assign-form">' +
+    '<div class="form-group"><label for="assignNote">Note</label><select id="assignNote">' +
+    opts(['C', 'D', 'E', 'F', 'G', 'A', 'B'], cur ? cur.note : 'C') + '</select></div>' +
+    '<div class="form-group"><label for="assignAcc">Accidental</label><select id="assignAcc">' +
+    opts(['', 's', 'b'], cur ? (cur.accidental || '') : '', ['Natural', 'Sharp', 'Flat']) + '</select></div>' +
+    '<div class="form-group"><label for="assignOctave">Octave</label><select id="assignOctave">' +
+    opts([0, 1, 2, 3, 4, 5, 6, 7, 8], cur ? cur.octave : 3) + '</select></div>' +
+    '<div class="form-group"><label for="assignVel">Velocity</label><select id="assignVel">' +
+    opts([1, 2, 3, 4, 5], cur ? cur.velocityLayer : 1) + '</select></div>' +
+    '<div class="form-group"><label for="assignArt">Articulation</label><input type="text" id="assignArt" maxlength="32" placeholder="e.g. Plucked" value="' +
+    escapeHtml(cur ? cur.articulation : (defaultArticulation() || '')) + '"></div>' +
+    '<div class="form-group"><label for="assignRR">Round Robin</label><select id="assignRR">' +
+    opts([1, 2, 3, 4, 5], cur ? cur.roundRobin : 1) + '</select></div>' +
+    '</div>' +
+    '<div class="status-msg" id="assignStatus" role="status"></div>' +
+    '<div class="detail-actions">' +
+    '<button class="btn-primary" id="btnApplyAssign">Apply</button>' +
+    '<button class="btn-secondary" id="btnPreviewUnmatched">Preview</button>' +
+    (cur ? '<button class="btn-secondary" id="btnUnassign">Unassign</button>' : '') +
+    '</div>' +
+    '</div>';
 
-    document.getElementById('btnPreviewUnmatched').addEventListener('click', function() {
-      if (sample.trimApproved) {
-        previewSample(sample.path, sample.trimStart, sample.trimEnd);
-      } else {
-        previewSample(sample.path);
-      }
+  document.getElementById('btnApplyAssign').addEventListener('click', function() {
+    applyManualAssignment(state.selectedSampleIndex);
+  });
+  document.getElementById('btnPreviewUnmatched').addEventListener('click', function() {
+    if (sample.trimApproved) {
+      previewSample(sample.path, sample.trimStart, sample.trimEnd);
+    } else {
+      previewSample(sample.path);
+    }
+  });
+  if (cur) {
+    document.getElementById('btnUnassign').addEventListener('click', function() {
+      var keep = { filename: sample.filename, path: sample.path, wavInfo: sample.wavInfo };
+      var fresh = parseFilename('', sample.path);
+      Object.keys(fresh).forEach(function(k) { sample[k] = fresh[k]; });
+      sample.filename = keep.filename;
+      sample.wavInfo = keep.wavInfo;
+      state.editingSampleIndex = -1;
+      refreshMapping();
     });
   }
+}
+
+/* Most common articulation among mapped samples, used as the form default */
+function defaultArticulation() {
+  var counts = {};
+  var best = null;
+  state.samples.forEach(function(s) {
+    if (!s.parsed || !s.articulation) return;
+    counts[s.articulation] = (counts[s.articulation] || 0) + 1;
+    if (!best || counts[s.articulation] > counts[best]) best = s.articulation;
+  });
+  return best;
 }
 
 function applyManualAssignment(index) {
@@ -507,21 +659,35 @@ function applyManualAssignment(index) {
   var acc = document.getElementById('assignAcc').value || null;
   var octave = parseInt(document.getElementById('assignOctave').value);
   var vel = parseInt(document.getElementById('assignVel').value);
-  var art = document.getElementById('assignArt').value || 'Default';
+  // Articulations become folder names and DS menu entries: keep them plain
+  var art = document.getElementById('assignArt').value.replace(/[^A-Za-z0-9 \-]/g, '').trim() || 'Default';
   var rr = parseInt(document.getElementById('assignRR').value);
+
+  var midi = calcMidiNote(note, acc, octave);
+  if (midi < 0 || midi > 127) {
+    setStatus('assignStatus', formatNoteName(note, acc, octave) + ' is outside the MIDI range (C-2 to G8).', 'error');
+    return;
+  }
 
   s.parsed = true;
   s.manualOverride = true;
   s.note = note;
   s.accidental = acc;
   s.octave = octave;
-  s.midiNote = calcMidiNote(note, acc, octave);
+  s.midiNote = midi;
   s.velocityLayer = vel;
   s.articulation = art;
   s.roundRobin = rr;
   s.instrument = state.instrumentName;
+  state.editingSampleIndex = -1;
 
-  // Recalculate ranges
+  refreshMapping();
+}
+
+function refreshMapping() {
+  state.samples.forEach(function(s) {
+    s.lowKey = s.highKey = s.rootKey = s.velLow = s.velHigh = null;
+  });
   assignKeyRanges(state.samples);
   assignVelocityRanges(state.samples);
 
@@ -534,11 +700,9 @@ function applyManualAssignment(index) {
 function renderKeyboardView() {
   var container = document.getElementById('keyboardWrap');
   renderKeyboard(container, state.samples, function(midiNote) {
-    // Find first sample at this pitch
     var idx = state.samples.findIndex(function(s) { return s.parsed && s.midiNote === midiNote; });
     if (idx >= 0) {
       selectSample(idx);
-      // Scroll into view
       var rows = document.querySelectorAll('.file-row');
       if (rows[idx]) rows[idx].scrollIntoView({ block: 'nearest' });
     }
@@ -550,21 +714,25 @@ function updateValidation() {
   var warningEl = document.getElementById('validationWarning');
   var btnNext = document.getElementById('btnToPhase3');
 
-  if (validation.errors.length > 0) {
-    warningEl.classList.remove('hidden');
-    warningEl.textContent = validation.errors[0];
-    btnNext.style.display = 'none';
-  } else {
-    warningEl.classList.add('hidden');
-    btnNext.style.display = '';
+  warningEl.innerHTML = '';
+  warningEl.classList.remove('is-warning');
+  var messages = validation.errors.concat(validation.warnings);
+  messages.forEach(function(m, i) {
+    var line = document.createElement('div');
+    line.className = i < validation.errors.length ? 'v-error' : 'v-warning';
+    line.textContent = m;
+    warningEl.appendChild(line);
+  });
+  warningEl.classList.toggle('hidden', messages.length === 0);
+  if (validation.errors.length === 0 && validation.warnings.length > 0) {
+    warningEl.classList.add('is-warning');
   }
 
-  if (validation.warnings.length > 0) {
-    warningEl.classList.remove('hidden');
-    warningEl.textContent = validation.warnings[0];
-    warningEl.style.borderColor = 'rgba(201,147,58,0.15)';
-    warningEl.style.background = 'var(--warn-bg)';
-    warningEl.style.color = 'var(--warn)';
+  if (validation.errors.length > 0) {
+    btnNext.style.display = 'none';
+    uncompleteFrom(2);
+  } else {
+    btnNext.style.display = '';
   }
 }
 
@@ -572,13 +740,11 @@ function updateValidation() {
 function renderPhase3() {
   var stats = getSampleStats(state.samples);
 
-  // Initialize layout builder if not already created
   if (!state.layoutBuilder) {
     var canvas = document.getElementById('layoutCanvas');
     state.layoutBuilder = new LayoutBuilder(canvas);
   }
 
-  // Update builder state
   state.layoutBuilder.instrumentName = state.instrumentName;
   state.layoutBuilder.sampleCount = stats.totalSamples;
   state.layoutBuilder.updateControls();
@@ -595,8 +761,9 @@ function renderControlToggles() {
 
   Object.keys(templateConfig.controls).forEach(function(key) {
     var ctrl = templateConfig.controls[key];
+    var available = isControlAvailable(key);
     var toggle = document.createElement('div');
-    toggle.className = 'control-toggle';
+    toggle.className = 'control-toggle' + (available ? '' : ' unavailable');
 
     var checkbox = document.createElement('div');
     checkbox.className = 'toggle-checkbox' + (ctrl.enabled ? ' checked' : '');
@@ -608,12 +775,20 @@ function renderControlToggles() {
     toggle.appendChild(checkbox);
     toggle.appendChild(label);
 
-    toggle.addEventListener('click', function() {
+    if (!available) {
+      var need = document.createElement('span');
+      need.className = 'toggle-need';
+      need.textContent = 'needs ' + templateConfig.effects[ctrl.requires].label;
+      toggle.appendChild(need);
+      toggle.title = ctrl.label + ' controls the ' + templateConfig.effects[ctrl.requires].label +
+        ' effect. Turn that effect on to use it.';
+    }
+
+    makeCheckable(toggle, ctrl.enabled, function() {
       toggleControl(key);
-      checkbox.classList.toggle('checked');
-      if (state.layoutBuilder) {
-        state.layoutBuilder.updateControls();
-      }
+      checkbox.classList.toggle('checked', templateConfig.controls[key].enabled);
+      toggle.setAttribute('aria-checked', templateConfig.controls[key].enabled ? 'true' : 'false');
+      if (state.layoutBuilder) state.layoutBuilder.updateControls();
     });
 
     grid.appendChild(toggle);
@@ -634,21 +809,29 @@ function renderFormatToggles() {
 
     var info = document.createElement('div');
     info.className = 'effect-info';
-    info.innerHTML = '<div class="effect-name">' + fmt.label + '</div>' +
-                     '<div class="effect-desc">' + fmt.description + '</div>';
+    info.innerHTML = '<div class="effect-name">' + escapeHtml(fmt.label) + '</div>' +
+                     '<div class="effect-desc">' + escapeHtml(fmt.description) + '</div>';
 
     toggle.appendChild(checkbox);
     toggle.appendChild(info);
 
-    toggle.addEventListener('click', function() {
-      var toggled = toggleExportFormat(key);
-      if (toggled) {
-        checkbox.classList.toggle('checked');
+    makeCheckable(toggle, fmt.enabled, function() {
+      if (toggleExportFormat(key)) {
+        checkbox.classList.toggle('checked', templateConfig.exportFormats[key].enabled);
+        toggle.setAttribute('aria-checked', templateConfig.exportFormats[key].enabled ? 'true' : 'false');
+        setStatus('formatStatus', '');
+      } else {
+        setStatus('formatStatus', 'At least one export format is required.', 'error');
       }
     });
 
     panel.appendChild(toggle);
   });
+  var status = document.createElement('div');
+  status.id = 'formatStatus';
+  status.className = 'status-msg';
+  status.setAttribute('role', 'status');
+  panel.appendChild(status);
 }
 
 function renderEffectToggles() {
@@ -665,16 +848,20 @@ function renderEffectToggles() {
 
     var info = document.createElement('div');
     info.className = 'effect-info';
-    info.innerHTML = '<div class="effect-name">' + fx.label + '</div>' +
-                     '<div class="effect-desc">' + fx.description + '</div>';
+    info.innerHTML = '<div class="effect-name">' + escapeHtml(fx.label) + '</div>' +
+                     '<div class="effect-desc">' + escapeHtml(fx.description) + '</div>';
 
     toggle.appendChild(checkbox);
     toggle.appendChild(info);
 
-    toggle.addEventListener('click', function() {
+    makeCheckable(toggle, fx.enabled, function() {
       toggleEffect(key);
-      checkbox.classList.toggle('checked');
+      checkbox.classList.toggle('checked', templateConfig.effects[key].enabled);
+      toggle.setAttribute('aria-checked', templateConfig.effects[key].enabled ? 'true' : 'false');
+      // Some knobs depend on effects (Cutoff/Res → Filter, Reverb → Reverb)
+      renderControlToggles();
       if (state.layoutBuilder) {
+        state.layoutBuilder.updateControls();
         state.layoutBuilder.updateEffects();
       }
     });
@@ -688,13 +875,11 @@ function renderPhase4() {
   var stats = getSampleStats(state.samples);
   var formats = getEnabledFormats();
 
-  // Capture builder positions for export
   if (state.layoutBuilder) {
     state.knobPositions = state.layoutBuilder.getPositions();
     state.uiHeight = state.layoutBuilder.getRequiredHeight();
   }
 
-  // Render read-only preview canvas
   if (!state.previewBuilder) {
     var previewCanvas = document.getElementById('previewCanvas');
     if (previewCanvas) {
@@ -706,7 +891,6 @@ function renderPhase4() {
     state.previewBuilder.sampleCount = stats.totalSamples;
     state.previewBuilder.updateControls();
     state.previewBuilder.updateEffects();
-    // Copy positions from layout builder
     if (state.knobPositions) {
       state.previewBuilder.knobs.forEach(function(k) {
         var saved = state.knobPositions.find(function(p) { return p.key === k.key; });
@@ -721,76 +905,113 @@ function renderPhase4() {
 
   var grid = document.getElementById('summaryGrid');
   grid.innerHTML =
-    '<div class="summary-cell"><span class="label">INSTRUMENT</span><div class="value">' + state.instrumentName + '</div></div>' +
+    '<div class="summary-cell"><span class="label">INSTRUMENT</span><div class="value">' + escapeHtml(state.instrumentName) + '</div></div>' +
     '<div class="summary-cell"><span class="label">SAMPLES</span><div class="value">' + stats.totalSamples + '</div></div>' +
     '<div class="summary-cell"><span class="label">ARTICULATIONS</span><div class="value">' + stats.articulationCount + '</div></div>' +
     '<div class="summary-cell"><span class="label">VEL LAYERS</span><div class="value">' + stats.maxVelocityLayers + '</div></div>' +
     '<div class="summary-cell"><span class="label">ROUND ROBINS</span><div class="value">' + stats.maxRoundRobins + '</div></div>' +
     '<div class="summary-cell"><span class="label">TEMPLATE</span><div class="value">Chromatic</div></div>';
 
-  // Render output formats
   var outputEl = document.getElementById('outputFormats');
   var html = '';
-  if (formats.indexOf('kontakt') !== -1) {
-    html += '<div class="output-row">' +
-      '<div class="output-info"><span class="output-format">Kontakt 6+</span>' +
-      '<span class="output-desc">KSP script + resource container</span></div>' +
-      '<span class="output-badge">.txt</span></div>';
-  }
   if (formats.indexOf('decentsampler') !== -1) {
-    if (html) html += '<div style="border-top:1px solid var(--divider);margin:10px 0;"></div>';
     html += '<div class="output-row">' +
       '<div class="output-info"><span class="output-format">Decent Sampler</span>' +
-      '<span class="output-desc">Ready-to-play .dspreset \u2014 zero manual steps</span></div>' +
+      '<span class="output-desc">Ready-to-play .dspreset — open it and play</span></div>' +
       '<span class="output-badge">.dspreset</span></div>';
+  }
+  if (formats.indexOf('kontakt') !== -1) {
+    if (html) html += '<div style="border-top:1px solid var(--divider);margin:10px 0;"></div>';
+    html += '<div class="output-row">' +
+      '<div class="output-info"><span class="output-format">Kontakt 6+</span>' +
+      '<span class="output-desc">Samples, KSP script and skin — map in Kontakt using the setup guide</span></div>' +
+      '<span class="output-badge">.txt</span></div>';
   }
   outputEl.innerHTML = html;
 }
 
+/* Never build over an earlier export: pick "<name> (2)", "(3)", ... */
+async function uniqueOutputPath(path) {
+  var candidate = path.replace(/[\/\\]+$/, '');
+  var base = candidate;
+  for (var n = 2; await window.__TAURI__.core.invoke('path_exists', { path: candidate }); n++) {
+    candidate = base + ' (' + n + ')';
+    if (n > 999) throw new Error('Too many existing exports named ' + base);
+  }
+  return candidate;
+}
+
 async function doBuild() {
+  if (state.building) return;
+  var btn = document.getElementById('btnBuild');
+  var progress = document.getElementById('progressContainer');
+  var errorEl = document.getElementById('buildError');
+  errorEl.classList.remove('visible');
+
+  var result;
   try {
-    var result = await window.__TAURI__.dialog.save({
-      title: 'Choose output directory',
-      defaultPath: state.instrumentName + '_SampleArchitect'
+    result = await window.__TAURI__.dialog.save({
+      title: 'Choose where to create the instrument folder',
+      defaultPath: safePathSegment(state.instrumentName, 'Instrument') + '_SampleArchitect'
     });
+  } catch (err) {
+    showBuildError('Could not open the save dialog: ' + errText(err));
+    return;
+  }
+  if (!result) return;
 
-    if (!result) return;
+  state.building = true;
+  btn.style.display = 'none';
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('progressLabel').textContent = 'Preparing…';
+  progress.classList.add('visible');
 
+  try {
+    var outputDir = await uniqueOutputPath(result);
     var stats = getSampleStats(state.samples);
-    // Override instrument name with user-editable field
     stats.instrument = state.instrumentName;
 
-    // Show progress
-    var btn = document.getElementById('btnBuild');
-    btn.style.display = 'none';
-    var progress = document.getElementById('progressContainer');
-    progress.classList.add('visible');
-
-    var exportResult = await exportInstrument(state.samples, stats, templateConfig, result, function(stageIdx, label) {
-      var pct = ((stageIdx + 1) / 8) * 100;
+    state.outputPath = await exportInstrument(state.samples, stats, templateConfig, outputDir, function(stageIdx, label, total) {
+      var pct = Math.min(100, ((stageIdx + 1) / (total || 8)) * 100);
       document.getElementById('progressFill').style.width = pct + '%';
       document.getElementById('progressLabel').textContent = label;
     });
 
-    state.outputPath = exportResult;
-
-    // Show completion
     progress.classList.remove('visible');
+    document.getElementById('completionPath').textContent = state.outputPath;
+    document.getElementById('btnCopyScript').style.display = lastGeneratedKSP ? '' : 'none';
     document.getElementById('completion').classList.add('visible');
-
+    document.getElementById('completion').scrollIntoView({ block: 'center', behavior: 'smooth' });
   } catch (err) {
     console.error('Build failed:', err);
-    document.getElementById('progressLabel').textContent = 'Build failed: ' + err;
+    progress.classList.remove('visible');
+    btn.style.display = '';
+    showBuildError('Build failed: ' + errText(err) + '. Nothing was overwritten; fix the problem and try again.');
+  } finally {
+    state.building = false;
   }
+}
+
+function showBuildError(msg) {
+  var el = document.getElementById('buildError');
+  el.textContent = msg;
+  el.classList.add('visible');
+  el.scrollIntoView({ block: 'center' });
+}
+
+function resetBuildCard() {
+  document.getElementById('completion').classList.remove('visible');
+  document.getElementById('buildError').classList.remove('visible');
+  document.getElementById('btnBuild').style.display = '';
 }
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', function() {
-  // Step nav clicks
+  document.getElementById('appVersion').textContent = 'SampleArchitect v' + SA_VERSION;
+
   document.querySelectorAll('.step-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      var step = parseInt(btn.dataset.step);
-      goToPhase(step);
+      goToPhase(parseInt(btn.dataset.step));
     });
   });
 
@@ -801,6 +1022,11 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('settingsSaveBtn').addEventListener('click', saveSettings);
   document.getElementById('settingsToggleKey').addEventListener('click', toggleApiKeyVisibility);
   document.getElementById('settingsTestKey').addEventListener('click', testApiKey);
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('settingsOverlay').classList.contains('visible')) {
+      closeSettingsModal();
+    }
+  });
 
   // Phase 1 chat
   document.getElementById('btnChatSend').addEventListener('click', function() {
@@ -818,23 +1044,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  // Phase 1 — decide layout based on API key
   updatePhase1Layout();
   renderChatMessages();
 
-  // Phase 1
   initPhase1();
-
-  // Phase 2
   initPhase2();
+  renderFileList();
+  renderSampleDetail();
 
-  // Phase 2 instrument name input
   document.getElementById('instrumentNameInput').addEventListener('input', function() {
-    state.instrumentName = this.value || 'My Instrument';
+    state.instrumentName = this.value.trim() || 'My Instrument';
     document.getElementById('projectName').textContent = state.instrumentName + ' Project';
   });
 
-  // Phase 2 Accept All / Reject All Trims
   document.getElementById('btnAcceptAllTrims').addEventListener('click', function() {
     if (state.samples.length > 0) acceptAllTrims();
   });
@@ -842,22 +1064,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (state.samples.length > 0) rejectAllTrims();
   });
 
-  // Phase 2 → Phase 3 button
   document.getElementById('btnToPhase3').addEventListener('click', function() {
     completePhase(2);
     goToPhase(3);
   });
 
-  // Phase 3 Auto Layout button
   document.getElementById('btnAutoLayout').addEventListener('click', function() {
-    if (state.layoutBuilder) {
-      state.layoutBuilder.autoLayout();
-    }
+    if (state.layoutBuilder) state.layoutBuilder.autoLayout();
   });
 
-  // Phase 3 → Phase 4 button
   document.getElementById('btnToPhase4').addEventListener('click', function() {
-    // Capture positions before leaving Phase 3
     if (state.layoutBuilder) {
       state.knobPositions = state.layoutBuilder.getPositions();
       state.uiHeight = state.layoutBuilder.getRequiredHeight();
@@ -866,51 +1082,39 @@ document.addEventListener('DOMContentLoaded', function() {
     goToPhase(4);
   });
 
-  // Phase 4 build
-  document.getElementById('btnBuild').addEventListener('click', function() {
-    doBuild();
-  });
+  document.getElementById('btnBuild').addEventListener('click', doBuild);
+  document.getElementById('btnBuildAgain').addEventListener('click', resetBuildCard);
 
-  // Phase 4 copy script to clipboard
   document.getElementById('btnCopyScript').addEventListener('click', function() {
     var btn = document.getElementById('btnCopyScript');
-    if (lastGeneratedKSP) {
-      navigator.clipboard.writeText(lastGeneratedKSP).then(function() {
-        btn.textContent = 'Copied!';
-        btn.classList.add('copied');
-        setTimeout(function() {
-          btn.textContent = 'Copy Script to Clipboard';
-          btn.classList.remove('copied');
-        }, 2000);
-      }).catch(function(err) {
-        console.error('Clipboard copy failed:', err);
-        btn.textContent = 'Copy failed';
-      });
-    } else {
-      btn.textContent = 'No KSP generated';
+    if (!lastGeneratedKSP) return;
+    navigator.clipboard.writeText(lastGeneratedKSP).then(function() {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
       setTimeout(function() {
         btn.textContent = 'Copy Script to Clipboard';
+        btn.classList.remove('copied');
       }, 2000);
-    }
+    }).catch(function(err) {
+      console.error('Clipboard copy failed:', err);
+      btn.textContent = 'Copy failed — open the script file instead';
+    });
   });
 
-  // Phase 4 open folder
+  function openPath(p) {
+    if (!p || !window.__TAURI__ || !window.__TAURI__.shell) return;
+    Promise.resolve(window.__TAURI__.shell.open(p)).catch(function(err) {
+      showBuildError('Could not open ' + p + ': ' + errText(err));
+    });
+  }
   document.getElementById('btnOpenFolder').addEventListener('click', function() {
-    if (state.outputPath && window.__TAURI__ && window.__TAURI__.shell) {
-      window.__TAURI__.shell.open(state.outputPath);
-    }
+    openPath(state.outputPath);
   });
-
-  // Phase 4 view guide
   document.getElementById('btnViewGuide').addEventListener('click', function() {
-    if (state.outputPath && window.__TAURI__ && window.__TAURI__.shell) {
-      window.__TAURI__.shell.open(state.outputPath + '/Setup Guide.txt');
-    }
+    if (state.outputPath) openPath(state.outputPath + '/Setup Guide.txt');
   });
 
-  // Initialize MIDI support
   initMIDI();
 
-  // Set initial phase
   goToPhase(1);
 });
