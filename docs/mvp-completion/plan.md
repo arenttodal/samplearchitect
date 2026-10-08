@@ -28,3 +28,6 @@ SampleArchitect is a free, local, offline desktop app. You record an instrument,
 | M4 | Release candidate | versions, tauri bundle config, README, guide text, release notes | `cargo tauri build` artifact, launch under Xvfb, fresh-clone run | Artifact built and launches |
 
 Status is tracked in verification.md.
+
+## Status (2026-10-08)
+M1–M4 are done. AC1–AC9 are met in automated tests (see verification.md). The exception is playback inside Kontakt and Decent Sampler, which needs the hosts and is listed in release-handoff.md.
